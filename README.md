@@ -52,7 +52,14 @@ Then pick a menu option:
 | `6` | Print the access & security guide |
 | `7` | Restart all services (novnc-desktop, 9router) |
 | `8` | Configure swap size (interactive) |
-| `9` | Exit |
+| `9` | Configure VNC access: SSH tunnel (127.0.0.1) vs public IP (0.0.0.0) |
+| `10` | Exit |
+
+> **`[9] Configure VNC Access`** toggles where noVNC listens. Default is
+> `127.0.0.1` (SSH tunnel only). Choosing public IP binds `0.0.0.0`, opens
+> port `6080` in UFW, and exposes VNC in **plaintext** — only do this if you
+> also open the port in your cloud firewall (Azure NSG) and accept the risk.
+> Switch back to SSH tunnel to close it again. |
 
 > **Browser note:** Brave is installed for modern web apps (Next.js dashboards
 > etc.) that Falkon/QtWebEngine cannot render. It is **memory-heavy**

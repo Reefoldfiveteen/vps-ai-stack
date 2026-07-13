@@ -19,6 +19,8 @@ NOVNC_DIR="/opt/novnc"
 VNCSERVER_BIN="$(command -v vncserver 2>/dev/null || echo /usr/bin/vncserver)"
 WEBSOCKIFY_BIN="$(command -v websockify 2>/dev/null || echo /usr/bin/websockify)"
 NPM_BIN="$USER_HOME/.npm-global/bin"
+# VNC bind address (toggled by setup menu [9]); default localhost
+VNC_BIND="$(. /etc/vps-ai-stack/vnc.conf 2>/dev/null; echo "${VNC_BIND:-127.0.0.1}")"
 
 mkdir -p "$USER_HOME/.vnc"
 chown "$USERNAME":"$USERNAME" "$USER_HOME/.vnc"
@@ -28,8 +30,8 @@ info "Starting noVNC desktop (vncserver :1 + websockify :6080)..."
 su - "$USERNAME" -c "XDG_RUNTIME_DIR=/run/user/\$(id -u) $VNCSERVER_BIN -kill :1 >/dev/null 2>&1 || true"
 su - "$USERNAME" -c "XDG_RUNTIME_DIR=/run/user/\$(id -u) nohup $VNCSERVER_BIN :1 -geometry 1280x720 -depth 24 >/tmp/novnc_vnc.log 2>&1 &"
 sleep 3
-su - "$USERNAME" -c "XDG_RUNTIME_DIR=/run/user/\$(id -u) nohup $WEBSOCKIFY_BIN --web $NOVNC_DIR 127.0.0.1:6080 localhost:5901 >/tmp/novnc_ws.log 2>&1 &"
-ok "noVNC should be up on 127.0.0.1:6080 (tunnel: ssh -L 6080:localhost:6080 $USERNAME@host)"
+su - "$USERNAME" -c "XDG_RUNTIME_DIR=/run/user/\$(id -u) nohup $WEBSOCKIFY_BIN --web $NOVNC_DIR ${VNC_BIND}:6080 localhost:5901 >/tmp/novnc_ws.log 2>&1 &"
+ok "noVNC should be up on ${VNC_BIND}:6080 (tunnel: ssh -L 6080:localhost:6080 $USERNAME@host)"
 
 # ---- 9Router ----
 if [[ -x "$NPM_BIN/9router" ]]; then

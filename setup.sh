@@ -74,7 +74,8 @@ show_menu() {
   echo "  [6] Print Access & Security Guide"
   echo "  [7] Restart All Services (novnc-desktop, 9router)"
   echo "  [8] Configure Swap Size"
-  echo "  [9] Exit"
+  echo "  [9] Configure VNC Access (SSH tunnel / Public IP)"
+  echo "  [10] Exit"
   echo
 }
 
@@ -107,7 +108,10 @@ while true; do
     8)
       bash "$LIB_DIR/swap.sh"
       ;;
-    9) ok "Goodbye."; exit 0 ;;
+    9)
+      bash "$LIB_DIR/access.sh"
+      ;;
+    10) ok "Goodbye."; exit 0 ;;
     *) warn "Invalid option." ;;
   esac
 done

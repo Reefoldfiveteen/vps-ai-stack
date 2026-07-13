@@ -207,6 +207,12 @@ chown -R "$USERNAME":"$USERNAME" "$USER_HOME/.config"
 VNCSERVER_BIN="$(command -v vncserver 2>/dev/null || find /usr /bin /opt -name vncserver -type f 2>/dev/null | head -1 || echo /usr/bin/vncserver)"
 WEBSOCKIFY_BIN="$(command -v websockify 2>/dev/null || find /usr /bin /opt -name websockify -type f 2>/dev/null | head -1 || echo /usr/bin/websockify)"
 
+# Config directory for VNC bind address (toggled by access.sh)
+CONF_DIR="/etc/vps-ai-stack"
+mkdir -p "$CONF_DIR"
+echo "VNC_BIND=127.0.0.1" > "$CONF_DIR/vnc.conf"
+chmod 644 "$CONF_DIR/vnc.conf"
+
 cat > "$SERVICE_DIR/novnc-desktop.service" <<EOF
 [Unit]
 Description=noVNC + TigerVNC Desktop (LXQt)
@@ -214,9 +220,10 @@ After=network.target
 
 [Service]
 Type=simple
+EnvironmentFile=$CONF_DIR/vnc.conf
 WorkingDirectory=$USER_HOME
 ExecStartPre=/bin/sh -c '$VNCSERVER_BIN -kill :1 >/dev/null 2>&1 || true'
-ExecStart=/bin/sh -c '$VNCSERVER_BIN :1 -geometry 1280x720 -depth 24 && sleep 2 && $WEBSOCKIFY_BIN --web $NOVNC_DIR 127.0.0.1:6080 localhost:5901'
+ExecStart=/bin/sh -c '$VNCSERVER_BIN :1 -geometry 1280x720 -depth 24 && sleep 2 && $WEBSOCKIFY_BIN --web $NOVNC_DIR \${VNC_BIND}:6080 localhost:5901'
 ExecStop=/bin/sh -c '$VNCSERVER_BIN -kill :1 || true'
 Restart=always
 RestartSec=5
