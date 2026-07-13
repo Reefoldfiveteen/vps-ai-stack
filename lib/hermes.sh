@@ -1,0 +1,30 @@
+#!/bin/bash
+#
+# vps-ai-stack/lib/hermes.sh
+# Downloads Hermes Agent + dependencies only. Manual config by user.
+#
+set -euo pipefail
+
+USERNAME="${SETUP_USER:?SETUP_USER not set}"
+RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; BLUE='\033[0;34m'; NC='\033[0m'
+info(){ echo -e "${BLUE}[*]${NC} $*"; }
+ok(){ echo -e "${GREEN}[+]${NC} $*"; }
+warn(){ echo -e "${YELLOW}[!]${NC} $*"; }
+
+export DEBIAN_FRONTEND=noninteractive
+
+info "Installing Hermes Agent dependencies..."
+apt-get update -y
+apt-get install -y --no-install-recommends \
+  curl wget git ca-certificates python3 python3-venv python3-pip \
+  nodejs npm ripgrep ffmpeg
+
+info "Running official Hermes installer as user '$USERNAME'..."
+su - "$USERNAME" -c "curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash"
+
+# Reload shell config so 'hermes' is on PATH
+su - "$USERNAME" -c "source ~/.bashrc 2>/dev/null; source ~/.profile 2>/dev/null; which hermes && hermes --version" || warn "hermes may need a fresh login to appear on PATH"
+
+ok "Hermes Agent installed (download + deps only)."
+warn "Configure it yourself: run 'hermes' then 'hermes model' / 'hermes setup'."
+warn "To use 9Router as provider, point Hermes at http://localhost:20128/v1 after 9Router is running."

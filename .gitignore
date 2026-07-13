@@ -1,0 +1,19 @@
+# Logs
+*.log
+node_modules/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*~
+
+# VNC runtime
+.vnc/
+
+# Hermes / 9Router user data (do not commit secrets)
+.hermes/
+.npm-global/
+config/
+
+# Swap file
+/swapfile
