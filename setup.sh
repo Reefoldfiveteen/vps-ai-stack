@@ -83,9 +83,14 @@ while true; do
     2) bash "$LIB_DIR/hermes.sh" ;;
     3) bash "$LIB_DIR/9router.sh" ;;
     4)
-      bash "$LIB_DIR/base.sh"
-      bash "$LIB_DIR/hermes.sh"
-      bash "$LIB_DIR/9router.sh"
+      for s in base hermes 9router; do
+        info "=== step: $s ==="
+        if bash "$LIB_DIR/$s.sh"; then
+          ok "$s complete"
+        else
+          err "$s failed (exit $?) — continuing with next step"
+        fi
+      done
       ;;
     5)
       bash "$LIB_DIR/access_guide.sh"

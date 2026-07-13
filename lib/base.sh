@@ -245,7 +245,7 @@ ufw --force reset
 ufw default deny incoming
 ufw default allow outgoing
 ufw allow "$SSH_PORT"/tcp comment 'SSH'
-ufw --force enable
+ufw --force enable || warn "ufw enable returned non-zero — verify firewall manually (ufw status)"
 
 ok "Base system installed."
 ok "noVNC bound to localhost:6080 (not exposed to internet)."
