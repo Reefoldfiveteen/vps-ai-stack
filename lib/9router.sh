@@ -65,9 +65,19 @@ EOF
 chown "$USERNAME":"$USERNAME" "$SERVICE_DIR/9router.service"
 
 loginctl enable-linger "$USERNAME" 2>/dev/null || true
-systemctl start "user@$(id -u "$USERNAME").service" 2>/dev/null || true
-su - "$USERNAME" -c "systemctl --user daemon-reload && systemctl --user enable 9router.service"
-su - "$USERNAME" -c "systemctl --user start 9router.service" || warn "9Router start deferred (may need reboot)"
+
+WANTS_DIR="$USER_HOME/.config/systemd/user/default.target.wants"
+mkdir -p "$WANTS_DIR"
+ln -sf "../9router.service" "$WANTS_DIR/9router.service"
+chown -R "$USERNAME":"$USERNAME" "$USER_HOME/.config"
+
+export XDG_RUNTIME_DIR="/run/user/$(id -u "$USERNAME")"
+systemctl start "user@$(id -u "$USERNAME").service" >/dev/null 2>&1 || true
+if su - "$USERNAME" -c "XDG_RUNTIME_DIR='$XDG_RUNTIME_DIR' systemctl --user daemon-reload >/dev/null 2>&1 && XDG_RUNTIME_DIR='$XDG_RUNTIME_DIR' systemctl --user start 9router.service >/dev/null 2>&1"; then
+  ok "9Router service started."
+else
+  warn "9Router not started now (no user bus during setup). It auto-starts after reboot (linger enabled)."
+fi
 
 ok "9Router installed. Dashboard: http://localhost:20128 (inside VPS / via tunnel)."
 warn "Configure providers via dashboard yourself. Then point Hermes at http://localhost:20128/v1"

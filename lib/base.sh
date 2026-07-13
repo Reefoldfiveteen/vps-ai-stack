@@ -218,12 +218,24 @@ WantedBy=default.target
 EOF
 chown "$USERNAME":"$USERNAME" "$SERVICE_DIR/novnc-desktop.service"
 
-# Enable linger so user services run without active session
+# Enable linger so user services run without an active login
 loginctl enable-linger "$USERNAME" 2>/dev/null || true
-# Start the user systemd manager immediately (so --user works before first login)
-systemctl start "user@$(id -u "$USERNAME").service" 2>/dev/null || true
-su - "$USERNAME" -c "systemctl --user daemon-reload && systemctl --user enable novnc-desktop.service"
-su - "$USERNAME" -c "systemctl --user start novnc-desktop.service" || warn "Service start deferred (may need reboot)"
+
+# Create the enable symlink manually (robust: systemctl --user may have no
+# bus during non-interactive setup). This is exactly what 'systemctl enable' does.
+WANTS_DIR="$USER_HOME/.config/systemd/user/default.target.wants"
+mkdir -p "$WANTS_DIR"
+ln -sf "../novnc-desktop.service" "$WANTS_DIR/novnc-desktop.service"
+chown -R "$USERNAME":"$USERNAME" "$USER_HOME/.config"
+
+# Best-effort: start the user manager + service now (needs a running user bus)
+export XDG_RUNTIME_DIR="/run/user/$(id -u "$USERNAME")"
+systemctl start "user@$(id -u "$USERNAME").service" >/dev/null 2>&1 || true
+if su - "$USERNAME" -c "XDG_RUNTIME_DIR='$XDG_RUNTIME_DIR' systemctl --user daemon-reload >/dev/null 2>&1 && XDG_RUNTIME_DIR='$XDG_RUNTIME_DIR' systemctl --user start novnc-desktop.service >/dev/null 2>&1"; then
+  ok "Desktop service started."
+else
+  warn "Service not started now (no user bus during setup). It auto-starts after reboot (linger enabled)."
+fi
 
 # ---- UFW ----
 info "Configuring UFW (SSH only, deny rest)..."
