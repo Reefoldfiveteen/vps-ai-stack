@@ -180,11 +180,19 @@ chown "$USERNAME":"$USERNAME" "$VNC_DIR/passwd"
 ok "VNC passwd file written ($(stat -c%s "$VNC_DIR/passwd") bytes)"
 
 # ---- VNC xstartup (LXQt) ----
+# Start a private D-Bus session bus (LXQt needs it) and keep the session
+# alive: if the WM/session exits, restart it instead of ending the VNC
+# session (which would drop the noVNC connection).
 cat > "$VNC_DIR/xstartup" <<'EOF'
 #!/bin/sh
 unset SESSION_MANAGER
-unset DBUS_SESSION_BUS_ADDRESS
-exec startlxqt
+if [ -z "$DBUS_SESSION_BUS_ADDRESS" ]; then
+  eval "$(dbus-launch --sh-syntax --exit-with-session)"
+fi
+while true; do
+  startlxqt
+  sleep 2
+done
 EOF
 chmod +x "$VNC_DIR/xstartup"
 chown "$USERNAME":"$USERNAME" "$VNC_DIR/xstartup"
