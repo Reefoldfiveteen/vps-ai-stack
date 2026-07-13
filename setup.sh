@@ -72,7 +72,8 @@ show_menu() {
   echo "  [4] Install Falkon Browser (lightweight Qt browser)"
   echo "  [5] Install All (1 -> 2 -> 3 -> 4)"
   echo "  [6] Print Access & Security Guide"
-  echo "  [7] Exit"
+  echo "  [7] Restart All Services (novnc-desktop, 9router)"
+  echo "  [8] Exit"
   echo
 }
 
@@ -99,7 +100,10 @@ while true; do
     6)
       bash "$LIB_DIR/access_guide.sh"
       ;;
-    7) ok "Goodbye."; exit 0 ;;
+    7)
+      bash "$LIB_DIR/restart.sh"
+      ;;
+    8) ok "Goodbye."; exit 0 ;;
     *) warn "Invalid option." ;;
   esac
 done
