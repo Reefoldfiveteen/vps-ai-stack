@@ -69,11 +69,12 @@ show_menu() {
   echo "  [1] Install Base System (LXQt + TigerVNC + noVNC + swap + UFW)"
   echo "  [2] Install Hermes Agent (download + deps only)"
   echo "  [3] Install 9Router (npm install only)"
-  echo "  [4] Install Falkon Browser (lightweight Qt browser)"
+  echo "  [4] Install Brave Browser"
   echo "  [5] Install All (1 -> 2 -> 3 -> 4)"
   echo "  [6] Print Access & Security Guide"
   echo "  [7] Restart All Services (novnc-desktop, 9router)"
-  echo "  [8] Exit"
+  echo "  [8] Configure Swap Size"
+  echo "  [9] Exit"
   echo
 }
 
@@ -85,10 +86,10 @@ while true; do
     2) bash "$LIB_DIR/hermes.sh" ;;
     3) bash "$LIB_DIR/9router.sh" ;;
     4)
-      bash "$LIB_DIR/falkon.sh"
+      bash "$LIB_DIR/brave.sh"
       ;;
     5)
-      for s in base hermes 9router falkon; do
+      for s in base hermes 9router brave; do
         info "=== step: $s ==="
         if bash "$LIB_DIR/$s.sh"; then
           ok "$s complete"
@@ -103,7 +104,10 @@ while true; do
     7)
       bash "$LIB_DIR/restart.sh"
       ;;
-    8) ok "Goodbye."; exit 0 ;;
+    8)
+      bash "$LIB_DIR/swap.sh"
+      ;;
+    9) ok "Goodbye."; exit 0 ;;
     *) warn "Invalid option." ;;
   esac
 done

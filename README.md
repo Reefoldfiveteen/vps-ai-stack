@@ -47,14 +47,18 @@ Then pick a menu option:
 | `1` | Install base system (LXQt + TigerVNC + noVNC + swap + UFW) |
 | `2` | Install Hermes Agent (download + deps only) |
 | `3` | Install 9Router (`npm install -g`, runs as your user) |
-| `4` | Install Falkon (lightweight Qt browser for LXQt) |
+| `4` | Install Brave Browser (official apt repo) |
 | `5` | Install everything (1 → 2 → 3 → 4) |
 | `6` | Print the access & security guide |
-| `7` | Exit |
+| `7` | Restart all services (novnc-desktop, 9router) |
+| `8` | Configure swap size (interactive) |
+| `9` | Exit |
 
-> **Browser note:** Falkon is a lightweight Qt/QtWebEngine browser that blends
-> with LXQt. On a 1 GiB VPS keep tabs minimal and close it when not in use —
-> browse from your laptop via the SSH tunnel when you can. |
+> **Browser note:** Brave is installed for modern web apps (Next.js dashboards
+> etc.) that Falkon/QtWebEngine cannot render. It is **memory-heavy**
+> (~300-400 MB idle, ~600-900 MB with a dashboard tab). On a 1 GiB VPS keep it
+> closed when not in use and size swap generously (menu `[8]`). For heavy
+> dashboards, browsing from your laptop via the SSH tunnel is still preferred. |
 
 After install, a reboot is recommended so the per-user systemd services start cleanly.
 
