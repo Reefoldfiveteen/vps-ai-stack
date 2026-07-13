@@ -104,11 +104,19 @@ systemctl --user restart novnc-desktop
 systemctl --user restart 9router
 ```
 
-## Updating
+## Updating the repo (push to GitHub)
+
+`update.sh` commits all local changes and pushes to the GitHub repo. Run it from
+inside the cloned directory:
 
 ```bash
-sudo bash update.sh reefii    # updates 9Router + Hermes, restarts services
+bash update.sh                 # auto message: "update: <timestamp>"
+bash update.sh "fix: vnc bind" # custom commit message
 ```
+
+To update the running **Hermes / 9Router** services on the VPS instead, use the
+tools themselves (e.g. `hermes update`, `npm update -g 9router`) and then
+`systemctl --user restart ...`.
 
 ## Security notes
 

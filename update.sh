@@ -1,34 +1,45 @@
 #!/bin/bash
 #
 # vps-ai-stack/update.sh
-# Updates Hermes Agent + 9Router in place. Run as root on VPS.
+# Commits all local changes and pushes to GitHub.
+# Run from inside the cloned repo directory.
 #
 set -euo pipefail
 
-USERNAME="${1:-reefii}"
 RED='\033[0;31m'; GREEN='\033[0;32m'; BLUE='\033[0;34m'; NC='\033[0m'
 info(){ echo -e "${BLUE}[*]${NC} $*"; }
 ok(){ echo -e "${GREEN}[+]${NC} $*"; }
 err(){ echo -e "${RED}[-]${NC} $*"; }
 
-if [[ $EUID -ne 0 ]]; then
-  err "Run as root: sudo bash update.sh [$USERNAME]"
-  exit 1
-fi
-if ! id "$USERNAME" &>/dev/null; then
-  err "User '$USERNAME' not found."
+# Must run inside a git repo
+if [[ ! -d .git ]]; then
+  err "Run this from inside the vps-ai-stack repo directory."
   exit 1
 fi
 
-info "Updating 9Router..."
-su - "$USERNAME" -c 'export PATH="$HOME/.npm-global/bin:$PATH"; npm update -g 9router'
+# Remote must exist
+if ! git remote get-url origin &>/dev/null; then
+  err "No 'origin' remote set. Add it first:"
+  err "  git remote add origin https://github.com/Reefoldfiveteen/vps-ai-stack.git"
+  exit 1
+fi
 
-info "Updating Hermes Agent..."
-su - "$USERNAME" -c 'hermes update' 2>/dev/null || \
-  su - "$USERNAME" -c 'curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash'
+# Optional commit message
+MSG="${1:-update: $(date '+%Y-%m-%d %H:%M')}"
+BRANCH="$(git rev-parse --abbrev-ref HEAD)"
 
-info "Restarting services..."
-su - "$USERNAME" -c 'systemctl --user restart 9router.service 2>/dev/null || true'
-su - "$USERNAME" -c 'systemctl --user restart novnc-desktop.service 2>/dev/null || true'
+info "Staging changes..."
+git add -A
 
-ok "Update complete. Check status: systemctl --user status 9router novnc-desktop"
+if git diff --cached --quiet; then
+  ok "Nothing to commit. Working tree clean."
+  exit 0
+fi
+
+info "Committing: $MSG"
+git commit -q -m "$MSG"
+
+info "Pushing to origin/$BRANCH..."
+git push origin "$BRANCH"
+
+ok "Pushed to GitHub: $(git remote get-url origin)"
