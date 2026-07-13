@@ -34,7 +34,7 @@ ok "noVNC should be up on 127.0.0.1:6080 (tunnel: ssh -L 6080:localhost:6080 $US
 # ---- 9Router ----
 if [[ -x "$NPM_BIN/9router" ]]; then
   info "Starting 9Router..."
-  su - "$USERNAME" -c "XDG_RUNTIME_DIR=/run/user/\$(id -u) PATH='$NPM_BIN:\$PATH' nohup $NPM_BIN/9router >/tmp/9router.log 2>&1 &"
+  su - "$USERNAME" -c "XDG_RUNTIME_DIR=/run/user/\$(id -u) PATH='$NPM_BIN:\$PATH' nohup $NPM_BIN/9router --host 127.0.0.1 >/tmp/9router.log 2>&1 &"
   ok "9Router should be up on 127.0.0.1:20128"
 else
   warn "9Router not found at $NPM_BIN/9router (run setup option [3] first)."

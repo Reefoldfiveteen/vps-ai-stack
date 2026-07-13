@@ -55,8 +55,8 @@ After=network.target
 Type=simple
 Environment=PATH=$NPM_PREFIX/bin:/usr/local/bin:/usr/bin:/bin
 WorkingDirectory=$USER_HOME
-ExecStart=$NPM_PREFIX/bin/9router
-Restart=on-failure
+ExecStart=$NPM_PREFIX/bin/9router --host 127.0.0.1
+Restart=always
 RestartSec=5
 
 [Install]

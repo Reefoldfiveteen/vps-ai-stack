@@ -218,7 +218,7 @@ WorkingDirectory=$USER_HOME
 ExecStartPre=/bin/sh -c '$VNCSERVER_BIN -kill :1 >/dev/null 2>&1 || true'
 ExecStart=/bin/sh -c '$VNCSERVER_BIN :1 -geometry 1280x720 -depth 24 && sleep 2 && $WEBSOCKIFY_BIN --web $NOVNC_DIR 127.0.0.1:6080 localhost:5901'
 ExecStop=/bin/sh -c '$VNCSERVER_BIN -kill :1 || true'
-Restart=on-failure
+Restart=always
 RestartSec=5
 
 [Install]
