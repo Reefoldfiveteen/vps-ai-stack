@@ -47,9 +47,14 @@ Then pick a menu option:
 | `1` | Install base system (LXQt + TigerVNC + noVNC + swap + UFW) |
 | `2` | Install Hermes Agent (download + deps only) |
 | `3` | Install 9Router (`npm install -g`, runs as your user) |
-| `4` | Install everything (1 → 2 → 3) |
-| `5` | Print the access & security guide |
-| `6` | Exit |
+| `4` | Install Falkon (lightweight Qt browser for LXQt) |
+| `5` | Install everything (1 → 2 → 3 → 4) |
+| `6` | Print the access & security guide |
+| `7` | Exit |
+
+> **Browser note:** Falkon is a lightweight Qt/QtWebEngine browser that blends
+> with LXQt. On a 1 GiB VPS keep tabs minimal and close it when not in use —
+> browse from your laptop via the SSH tunnel when you can. |
 
 After install, a reboot is recommended so the per-user systemd services start cleanly.
 
