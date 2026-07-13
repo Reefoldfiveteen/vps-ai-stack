@@ -6,7 +6,16 @@
 #
 set -euo pipefail
 
-USERNAME="${SETUP_USER:?SETUP_USER not set}"
+USERNAME="${SETUP_USER:-}"
+if [[ -z "$USERNAME" ]]; then
+  read -r -p "Target username for services (default: reefii): " USERNAME
+  USERNAME="${USERNAME:-reefii}"
+fi
+if ! id "$USERNAME" &>/dev/null; then
+  err "User '$USERNAME' does not exist. Create it first (or run via setup.sh)."
+  exit 1
+fi
+export SETUP_USER="$USERNAME"
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; BLUE='\033[0;34m'; NC='\033[0m'
 info(){ echo -e "${BLUE}[*]${NC} $*"; }
 ok(){ echo -e "${GREEN}[+]${NC} $*"; }

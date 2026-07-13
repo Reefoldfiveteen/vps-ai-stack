@@ -6,7 +6,16 @@
 #
 set -euo pipefail
 
-USERNAME="${SETUP_USER:?SETUP_USER not set}"
+USERNAME="${SETUP_USER:-}"
+if [[ -z "$USERNAME" ]]; then
+  read -r -p "Target username for services (default: reefii): " USERNAME
+  USERNAME="${USERNAME:-reefii}"
+fi
+if ! id "$USERNAME" &>/dev/null; then
+  err "User '$USERNAME' does not exist. Create it first (or run via setup.sh)."
+  exit 1
+fi
+export SETUP_USER="$USERNAME"
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; BLUE='\033[0;34m'; NC='\033[0m'
 info(){ echo -e "${BLUE}[*]${NC} $*"; }
 ok(){ echo -e "${GREEN}[+]${NC} $*"; }
@@ -34,8 +43,7 @@ mkdir -p "$NOVNC_DIR"
 curl -fsSL https://github.com/novnc/noVNC/archive/refs/tags/v1.4.0.tar.gz -o /tmp/novnc.tar.gz
 tar -xzf /tmp/novnc.tar.gz -C /tmp
 cp -r /tmp/noVNC-1.4.0/* "$NOVNC_DIR/"
-# websockify bundled inside utils
-chmod +x "$NOVNC_DIR"/utils/novnc_proxy "$NOVNC_DIR"/utils/websockify
+# websockify is installed via apt (git submodule not in release tarball)
 
 # ---- Swap (50% RAM, capped 512M-2G) ----
 TOTAL_RAM_KB=$(awk '/MemTotal/{print $2}' /proc/meminfo)
