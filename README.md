@@ -74,8 +74,13 @@ After install, a reboot is recommended so the per-user systemd services start cl
 noVNC is **not** exposed to the internet. From your laptop, open an SSH tunnel:
 
 ```bash
-ssh -L 6080:localhost:6080 reefii@<VPS_IP>
+ssh -o ServerAliveInterval=30 -o ServerAliveCountMax=10 -L 6080:localhost:6080 reefii@<VPS_IP>
 ```
+
+> **Keep the tunnel alive.** Add the `-o ServerAliveInterval=30` flags above (or
+> put them in `~/.ssh/config`) so the SSH tunnel is not dropped when idle — a
+> dropped tunnel shows up as "Disconnected" in noVNC. The base install also sets
+> `ClientAliveInterval` on the VPS sshd as a server-side safety net.
 
 Then open your browser:
 

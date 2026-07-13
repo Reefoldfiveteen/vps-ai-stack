@@ -197,6 +197,13 @@ EOF
 chmod +x "$VNC_DIR/xstartup"
 chown "$USERNAME":"$USERNAME" "$VNC_DIR/xstartup"
 
+# ---- Install robust launcher wrapper ----
+INSTALL_DIR="/opt/vps-ai-stack"
+mkdir -p "$INSTALL_DIR"
+cp "$SETUP_LIB/start_novnc.sh" "$INSTALL_DIR/start-novnc.sh"
+chmod +x "$INSTALL_DIR/start-novnc.sh"
+ok "Launcher wrapper installed: $INSTALL_DIR/start-novnc.sh"
+
 # ---- systemd user service: novnc desktop ----
 info "Creating systemd user service for desktop..."
 SERVICE_DIR="$USER_HOME/.config/systemd/user"
@@ -223,7 +230,7 @@ Type=simple
 EnvironmentFile=$CONF_DIR/vnc.conf
 WorkingDirectory=$USER_HOME
 ExecStartPre=/bin/sh -c '$VNCSERVER_BIN -kill :1 >/dev/null 2>&1 || true'
-ExecStart=/bin/sh -c '$VNCSERVER_BIN :1 -geometry 1280x720 -depth 24 && sleep 2 && $WEBSOCKIFY_BIN --web $NOVNC_DIR \${VNC_BIND}:6080 localhost:5901'
+ExecStart=$INSTALL_DIR/start-novnc.sh
 ExecStop=/bin/sh -c '$VNCSERVER_BIN -kill :1 || true'
 Restart=always
 RestartSec=5
@@ -261,6 +268,17 @@ ufw default deny incoming
 ufw default allow outgoing
 ufw allow "$SSH_PORT"/tcp comment 'SSH'
 ufw --force enable || warn "ufw enable returned non-zero — verify firewall manually (ufw status)"
+
+# ---- SSH keepalive (keep tunnels alive when idle) ----
+info "Setting SSH server keepalive (ClientAliveInterval)..."
+mkdir -p /etc/ssh/sshd_config.d
+cat > /etc/ssh/sshd_config.d/keepalive.conf <<'EOF'
+ClientAliveInterval 30
+ClientAliveCountMax 10
+TCPKeepAlive yes
+EOF
+systemctl reload ssh >/dev/null 2>&1 || systemctl restart ssh >/dev/null 2>&1 || true
+ok "SSH keepalive enabled (reload attempted)."
 
 ok "Base system installed."
 ok "noVNC bound to localhost:6080 (not exposed to internet)."
