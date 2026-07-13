@@ -104,6 +104,16 @@ systemctl --user restart novnc-desktop
 systemctl --user restart 9router
 ```
 
+If the user bus is unavailable (e.g. before the first reboot, or a host where
+`systemctl --user` cannot connect), start everything directly without systemd:
+
+```bash
+sudo bash start-services.sh reefii
+# tunnel: ssh -L 6080:localhost:6080 -L 20128:localhost:20128 reefii@<VPS_IP>
+```
+
+After a reboot the systemd services come up on their own (linger is enabled).
+
 ## Updating the repo (push to GitHub)
 
 `update.sh` commits all local changes and pushes to the GitHub repo. Run it from
