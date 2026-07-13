@@ -17,3 +17,6 @@ config/
 
 # Swap file
 /swapfile
+
+# Local scratch / secrets (never upload)
+void/
