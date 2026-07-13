@@ -85,7 +85,20 @@ USER_HOME=$(eval echo ~"$USERNAME")
 VNC_DIR="$USER_HOME/.vnc"
 mkdir -p "$VNC_DIR"
 chown "$USERNAME":"$USERNAME" "$VNC_DIR"
-echo "$VNC_PASS1" | su - "$USERNAME" -c "vncpasswd -f > $VNC_DIR/passwd"
+
+# Locate vncpasswd (tigervnc-common). Install if missing, use absolute path.
+VNCPASSWD="$(command -v vncpasswd || true)"
+if [[ -z "$VNCPASSWD" ]]; then
+  info "vncpasswd not found, installing tigervnc-common..."
+  apt-get install -y tigervnc-common
+  VNCPASSWD="$(command -v vncpasswd || echo /usr/bin/vncpasswd)"
+fi
+if [[ ! -x "$VNCPASSWD" ]]; then
+  err "vncpasswd still not found at $VNCPASSWD. Aborting."
+  exit 1
+fi
+# Run as root, write file, then chown to user (avoids su PATH issues)
+echo "$VNC_PASS1" | "$VNCPASSWD" -f > "$VNC_DIR/passwd"
 chmod 600 "$VNC_DIR/passwd"
 chown "$USERNAME":"$USERNAME" "$VNC_DIR/passwd"
 
@@ -105,6 +118,10 @@ SERVICE_DIR="$USER_HOME/.config/systemd/user"
 mkdir -p "$SERVICE_DIR"
 chown -R "$USERNAME":"$USERNAME" "$USER_HOME/.config"
 
+# Absolute paths (avoid relying on user PATH inside systemd)
+VNCSERVER_BIN="$(command -v vncserver || echo /usr/bin/vncserver)"
+WEBSOCKIFY_BIN="$(command -v websockify || echo /usr/bin/websockify)"
+
 cat > "$SERVICE_DIR/novnc-desktop.service" <<EOF
 [Unit]
 Description=noVNC + TigerVNC Desktop (LXQt)
@@ -113,9 +130,9 @@ After=network.target
 [Service]
 Type=simple
 WorkingDirectory=$USER_HOME
-ExecStartPre=/bin/sh -c 'vncserver -kill :1 >/dev/null 2>&1 || true'
-ExecStart=/bin/sh -c 'vncserver :1 -geometry 1280x720 -depth 24 && sleep 2 && websockify --web $NOVNC_DIR 127.0.0.1:6080 localhost:5901'
-ExecStop=/bin/sh -c 'vncserver -kill :1 || true'
+ExecStartPre=/bin/sh -c '$VNCSERVER_BIN -kill :1 >/dev/null 2>&1 || true'
+ExecStart=/bin/sh -c '$VNCSERVER_BIN :1 -geometry 1280x720 -depth 24 && sleep 2 && $WEBSOCKIFY_BIN --web $NOVNC_DIR 127.0.0.1:6080 localhost:5901'
+ExecStop=/bin/sh -c '$VNCSERVER_BIN -kill :1 || true'
 Restart=on-failure
 RestartSec=5
 
