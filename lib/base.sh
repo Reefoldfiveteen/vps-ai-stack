@@ -86,17 +86,28 @@ VNC_DIR="$USER_HOME/.vnc"
 mkdir -p "$VNC_DIR"
 chown "$USERNAME":"$USERNAME" "$VNC_DIR"
 
-# Locate vncpasswd (tigervnc-common). Install if missing, use absolute path.
-VNCPASSWD="$(command -v vncpasswd || true)"
+# Locate vncpasswd (tigervnc-common / tigervnc-standalone-server).
+# Don't assume a fixed path — search for it.
+find_vncpasswd() {
+  local p
+  p="$(command -v vncpasswd 2>/dev/null || true)"
+  [[ -n "$p" ]] && { echo "$p"; return; }
+  p="$(find /usr /bin /opt /sbin -name 'vncpasswd' -type f 2>/dev/null | head -1)"
+  [[ -n "$p" ]] && { echo "$p"; return; }
+  echo ""
+}
+VNCPASSWD="$(find_vncpasswd)"
 if [[ -z "$VNCPASSWD" ]]; then
-  info "vncpasswd not found, installing tigervnc-common..."
-  apt-get install -y tigervnc-common
-  VNCPASSWD="$(command -v vncpasswd || echo /usr/bin/vncpasswd)"
+  info "vncpasswd not found, installing tigervnc-standalone-server + tigervnc-common..."
+  apt-get install -y tigervnc-standalone-server tigervnc-common
+  VNCPASSWD="$(find_vncpasswd)"
 fi
-if [[ ! -x "$VNCPASSWD" ]]; then
-  err "vncpasswd still not found at $VNCPASSWD. Aborting."
+if [[ -z "$VNCPASSWD" || ! -x "$VNCPASSWD" ]]; then
+  err "vncpasswd still not found after install. Aborting."
+  err "Debug: $(find /usr /bin /opt -name 'vncpasswd*' 2>/dev/null)"
   exit 1
 fi
+ok "Using vncpasswd: $VNCPASSWD"
 # Run as root, write file, then chown to user (avoids su PATH issues)
 echo "$VNC_PASS1" | "$VNCPASSWD" -f > "$VNC_DIR/passwd"
 chmod 600 "$VNC_DIR/passwd"
@@ -119,8 +130,8 @@ mkdir -p "$SERVICE_DIR"
 chown -R "$USERNAME":"$USERNAME" "$USER_HOME/.config"
 
 # Absolute paths (avoid relying on user PATH inside systemd)
-VNCSERVER_BIN="$(command -v vncserver || echo /usr/bin/vncserver)"
-WEBSOCKIFY_BIN="$(command -v websockify || echo /usr/bin/websockify)"
+VNCSERVER_BIN="$(command -v vncserver 2>/dev/null || find /usr /bin /opt -name vncserver -type f 2>/dev/null | head -1 || echo /usr/bin/vncserver)"
+WEBSOCKIFY_BIN="$(command -v websockify 2>/dev/null || find /usr /bin /opt -name websockify -type f 2>/dev/null | head -1 || echo /usr/bin/websockify)"
 
 cat > "$SERVICE_DIR/novnc-desktop.service" <<EOF
 [Unit]
