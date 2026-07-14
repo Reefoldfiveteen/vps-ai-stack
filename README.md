@@ -91,6 +91,23 @@ http://localhost:6080
 Enter the VNC password you set during install. The VPS public IP is auto-detected
 and shown at the end of the base install.
 
+### Changing the VNC password
+
+The password utility is `tigervncpasswd` (package `tigervnc-tools`). To change it
+without reinstalling:
+
+```bash
+sudo apt-get update && sudo apt-get install -y tigervnc-tools
+tigervncpasswd            # type the new password when prompted
+# (writes ~/.vnc/passwd for the current user; run as reefii if needed)
+sudo -u reefii tigervncpasswd
+# then restart the desktop
+sudo pkill -9 -f start-novnc; sudo pkill -9 -f Xtigervnc; sudo pkill -9 -f websockify
+sudo runuser -u reefii -- bash -c 'nohup /opt/vps-ai-stack/start-novnc.sh >/tmp/vps-ai-stack-novnc.$(id -u reefii).log 2>&1 &'
+```
+
+No reinstall is required — only the running desktop needs a restart.
+
 ## Configuring the AI tools
 
 ### 9Router
