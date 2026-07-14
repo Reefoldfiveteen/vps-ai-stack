@@ -33,19 +33,14 @@ info "Staging changes..."
 git add -A
 
 if git diff --cached --quiet; then
-  ok "Nothing to commit. Working tree clean."
-  warn "Git sees no trackable changes. If you DID edit files, check:"
-  warn "  1) They are not inside an ignored path: void/, config/, .hermes/, .npm-global/, *.log, /swapfile"
-  warn "  2) You are in the correct repo dir (run 'pwd') and not editing files on the VPS"
-  warn "Diagnostic — current repo state:"
-  git status --short
-  git status --ignored --short | grep '^!!' | head -20 || true
-  exit 0
+  ok "Nothing new to commit. Working tree clean."
+  info "(Note: files in void/, config/, .hermes/, .npm-global/, *.log, /swapfile are gitignored and won't upload.)"
+else
+  info "Committing: $MSG"
+  git commit -q -m "$MSG"
 fi
 
-info "Committing: $MSG"
-git commit -q -m "$MSG"
-
+# Always push, so any local commits (new OR previously unpushed) reach GitHub.
 info "Pushing to origin/$BRANCH..."
 if git push -u origin "$BRANCH"; then
   ok "Pushed to GitHub: $(git remote get-url origin)"
