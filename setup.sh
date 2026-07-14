@@ -75,7 +75,8 @@ show_menu() {
   echo "  [7] Restart All Services (novnc-desktop, 9router)"
   echo "  [8] Configure Swap Size"
   echo "  [9] Configure VNC Access (SSH tunnel / Public IP)"
-  echo "  [10] Exit"
+  echo "  [10] Backup & Restore (Hermes / 9Router)"
+  echo "  [11] Exit"
   echo
 }
 
@@ -111,7 +112,8 @@ while true; do
     9)
       bash "$LIB_DIR/access.sh"
       ;;
-    10) ok "Goodbye."; exit 0 ;;
-    *) warn "Invalid option." ;;
+    10) bash "$LIB_DIR/backup.sh" ;;
+    11) ok "Goodbye."; exit 0 ;;
+     *) warn "Invalid option." ;;
   esac
 done
