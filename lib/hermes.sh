@@ -29,10 +29,20 @@ apt-get install -y --no-install-recommends \
   nodejs npm ripgrep ffmpeg
 
 info "Running official Hermes installer as user '$USERNAME'..."
+set +e
 su - "$USERNAME" -c "curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash"
+HERMES_RC=$?
+set -e
+if [[ $HERMES_RC -ne 0 ]]; then
+  err "Hermes installer exited with code $HERMES_RC — Hermes may NOT be installed."
+  err "Re-run 'bash lib/hermes.sh' manually and paste the output so we can see the exact error."
+else
+  ok "Hermes installer finished (exit 0)."
+fi
 
 # Reload shell config so 'hermes' is on PATH
-su - "$USERNAME" -c "source ~/.bashrc 2>/dev/null; source ~/.profile 2>/dev/null; which hermes && hermes --version" || warn "hermes may need a fresh login to appear on PATH"
+su - "$USERNAME" -c "source ~/.bashrc 2>/dev/null; source ~/.profile 2>/dev/null; hash -r; command -v hermes" \
+  || warn "hermes may need a fresh login to appear on PATH"
 
 ok "Hermes Agent installed (download + deps only)."
 warn "Configure it yourself: run 'hermes' then 'hermes model' / 'hermes setup'."
