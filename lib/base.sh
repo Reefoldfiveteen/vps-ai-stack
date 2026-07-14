@@ -261,6 +261,8 @@ ExecStart=$INSTALL_DIR/start-novnc.sh
 ExecStop=/bin/sh -c '$VNCSERVER_BIN -kill :1 || true'
 Restart=always
 RestartSec=5
+StartLimitIntervalSec=0
+StartLimitBurst=0
 
 [Install]
 WantedBy=default.target
