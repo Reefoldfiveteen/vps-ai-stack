@@ -2,11 +2,9 @@
 #
 # vps-ai-stack/lib/start_novnc.sh
 # Installed to /opt/vps-ai-stack/start-novnc.sh by base.sh.
-# Robust launcher for TigerVNC + websockify:
-#   - kills any stale :1 display before starting
-#   - starts vncserver in background, waits for port 5901
-#   - runs websockify in a restart loop so a websockify crash does NOT
-#     tear down the whole systemd service (avoids the "disconnect loop")
+# Robust launcher for TigerVNC + websockify. Designed to NEVER hard-exit,
+# so a slow/transient VNC startup or a websockify crash cannot trigger a
+# systemd restart storm ("disconnect loop").
 #
 set -u
 
@@ -15,6 +13,7 @@ VNC_PORT="5901"
 NOVNC_WEB="/opt/novnc"
 LISTEN_PORT="6080"
 CONF="/etc/vps-ai-stack/vnc.conf"
+LOG="/tmp/vps-ai-stack-novnc.log"
 
 # Read VNC_BIND (default localhost only)
 VNC_BIND="127.0.0.1"
@@ -30,36 +29,46 @@ fi
 VNCSERVER="$(command -v vncserver 2>/dev/null || echo /usr/bin/vncserver)"
 WEBSOCKIFY="$(command -v websockify 2>/dev/null || echo /usr/bin/websockify)"
 
-cleanup_stale() {
-  "$VNCSERVER" -kill "$VNC_DISPLAY" >/dev/null 2>&1 || true
-  rm -f "/tmp/.X${VNC_DISPLAY#:}-lock" "/tmp/.X11-unix/X${VNC_DISPLAY#:}" 2>/dev/null || true
-}
+log() { echo "$(date '+%F %T') $*" >> "$LOG"; }
 
-wait_for_port() {
-  local host="$1" port="$2" tries=50
-  while (( tries-- > 0 )); do
-    if (exec 3<>"/dev/tcp/$host/$port") 2>/dev/null; then
+port_up() {
+  local p="$1" i=0
+  while (( i++ < 75 )); do
+    if (exec 3<>"/dev/tcp/127.0.0.1/$p") 2>/dev/null; then
       exec 3>&- 3<&-
       return 0
     fi
-    sleep 0.2
+    sleep 0.4
   done
   return 1
 }
 
-cleanup_stale
+ensure_vnc() {
+  if port_up "$VNC_PORT"; then
+    return 0
+  fi
+  log "vnc not up on $VNC_PORT, starting $VNCSERVER $VNC_DISPLAY"
+  "$VNCSERVER" -kill "$VNC_DISPLAY" >/dev/null 2>&1 || true
+  rm -f "/tmp/.X${VNC_DISPLAY#:}-lock" "/tmp/.X11-unix/X${VNC_DISPLAY#:}" 2>/dev/null || true
+  "$VNCSERVER" "$VNC_DISPLAY" -geometry 1280x720 -depth 24 >/dev/null 2>&1 || true
+  if port_up "$VNC_PORT"; then
+    log "vnc up"
+    return 0
+  fi
+  return 1
+}
 
-# Start VNC server (background by default on TigerVNC)
-"$VNCSERVER" "$VNC_DISPLAY" -geometry 1280x720 -depth 24 >/dev/null 2>&1
-if ! wait_for_port 127.0.0.1 "$VNC_PORT"; then
-  echo "ERROR: vncserver did not come up on $VNC_PORT" >&2
-  exit 1
-fi
-
-# Keep websockify alive; restart on exit without restarting vncserver.
+# Outer loop: keep the whole thing alive forever (systemd Restart=always is
+# just a backstop). If vnc fails to start we wait and retry; if websockify
+# exits we restart it while leaving vnc running.
 while true; do
-  echo "[start-novnc] websockify listening on ${VNC_BIND}:${LISTEN_PORT} -> localhost:${VNC_PORT}"
-  "$WEBSOCKIFY" --web "$NOVNC_WEB" "${VNC_BIND}:${LISTEN_PORT}" "localhost:${VNC_PORT}"
-  echo "[start-novnc] websockify exited, restarting in 2s..."
+  if ! ensure_vnc; then
+    log "vnc failed to start, retry in 5s"
+    sleep 5
+    continue
+  fi
+  log "starting websockify on ${VNC_BIND}:${LISTEN_PORT} -> localhost:${VNC_PORT}"
+  "$WEBSOCKIFY" --web "$NOVNC_WEB" "${VNC_BIND}:${LISTEN_PORT}" "localhost:${VNC_PORT}" >>"$LOG" 2>&1
+  log "websockify exited, restarting in 2s"
   sleep 2
 done
