@@ -29,6 +29,14 @@ fi
 VNCSERVER="$(command -v vncserver 2>/dev/null || echo /usr/bin/vncserver)"
 WEBSOCKIFY="$(command -v websockify 2>/dev/null || echo /usr/bin/websockify)"
 
+# Singleton: never run two launchers at once — they would fight over the
+# listen port (each kills the other's websockify). If another instance is
+# already running, exit and let it keep the port.
+if pgrep -f "start-novnc.sh" | grep -v -x "$$" >/dev/null 2>&1; then
+  log "another start-novnc.sh already running (pid $(pgrep -f 'start-novnc.sh' | grep -v -x "$$" | head -1)) — exiting to avoid port fight"
+  exit 1
+fi
+
 log() { echo "$(date '+%F %T') $*" >> "$LOG"; }
 
 port_up() {
