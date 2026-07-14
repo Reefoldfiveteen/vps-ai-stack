@@ -68,6 +68,8 @@ while true; do
     continue
   fi
   log "starting websockify on ${VNC_BIND}:${LISTEN_PORT} -> localhost:${VNC_PORT}"
+  # Free the listen port in case a stale websockify is still bound to it.
+  pkill -u "$(id -un)" websockify >/dev/null 2>&1 || true
   "$WEBSOCKIFY" --web "$NOVNC_WEB" "${VNC_BIND}:${LISTEN_PORT}" "localhost:${VNC_PORT}" >>"$LOG" 2>&1
   log "websockify exited, restarting in 2s"
   sleep 2

@@ -24,6 +24,9 @@ err(){ echo -e "${RED}[-]${NC} $*"; }
 
 # ---- Kill any stale desktop session for this user (avoids :1 lock on reinstall) ----
 info "Stopping any existing desktop session for '$USERNAME' (reinstall-safe)..."
+runuser -u "$USERNAME" -- systemctl --user stop novnc-desktop.service >/dev/null 2>&1 || true
+pkill -u "$USERNAME" -f 'start-novnc.sh' >/dev/null 2>&1 || true
+pkill -u "$USERNAME" websockify >/dev/null 2>&1 || true
 runuser -u "$USERNAME" -- vncserver -kill :1 >/dev/null 2>&1 || true
 pkill -u "$USERNAME" Xtigervnc >/dev/null 2>&1 || true
 rm -f "/tmp/.X1-lock" "/tmp/.X11-unix/X1" 2>/dev/null || true
@@ -320,6 +323,12 @@ TCPKeepAlive yes
 EOF
 systemctl reload ssh >/dev/null 2>&1 || systemctl restart ssh >/dev/null 2>&1 || true
 ok "SSH keepalive enabled (reload attempted)."
+
+# VPS_IP may be passed by setup.sh; detect it if run standalone.
+if [[ -z "${VPS_IP:-}" ]]; then
+  VPS_IP="$(ip route get 1.1.1.1 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i=="src") print $(i+1)}' | head -1)"
+  [[ -z "$VPS_IP" ]] && VPS_IP="$(curl -fsS --max-time 5 https://api.ipify.org || echo '<VPS_IP>')"
+fi
 
 ok "Base system installed."
 ok "noVNC bound to localhost:6080 (not exposed to internet)."
