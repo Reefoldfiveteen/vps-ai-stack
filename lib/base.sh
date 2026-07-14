@@ -17,16 +17,16 @@ if ! id "$USERNAME" &>/dev/null; then
 fi
 export SETUP_USER="$USERNAME"
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; BLUE='\033[0;34m'; NC='\033[0m'
+info(){ echo -e "${BLUE}[*]${NC} $*"; }
+ok(){ echo -e "${GREEN}[+]${NC} $*"; }
+warn(){ echo -e "${YELLOW}[!]${NC} $*"; }
+err(){ echo -e "${RED}[-]${NC} $*"; }
 
 # ---- Kill any stale desktop session for this user (avoids :1 lock on reinstall) ----
 info "Stopping any existing desktop session for '$USERNAME' (reinstall-safe)..."
 su - "$USERNAME" -c 'vncserver -kill :1 >/dev/null 2>&1' || true
 pkill -u "$USERNAME" Xtigervnc >/dev/null 2>&1 || true
 rm -f "/tmp/.X1-lock" "/tmp/.X11-unix/X1" 2>/dev/null || true
-info(){ echo -e "${BLUE}[*]${NC} $*"; }
-ok(){ echo -e "${GREEN}[+]${NC} $*"; }
-warn(){ echo -e "${YELLOW}[!]${NC} $*"; }
-err(){ echo -e "${RED}[-]${NC} $*"; }
 
 export DEBIAN_FRONTEND=noninteractive
 
