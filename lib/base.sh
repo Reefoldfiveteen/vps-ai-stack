@@ -118,17 +118,16 @@ else
 fi
 
 # ---- Create VNC passwd file ----
-# vncpasswd binary is NOT shipped by tigervnc-* on Ubuntu 24.04, so we
-# replicate rfb::obfuscate() in pure Python (stdlib only, no crypto deps):
-#   DES-ECB of the 8-byte NUL-padded password with the fixed key
-#   {23,82,107,6,35,78,88,7}, no IV, no padding -> 8-byte ~/.vnc/passwd.
-# Verified against the FIPS-46 DES test vector (matches TigerVNC/d3des).
-# If a real vncpasswd exists on another distro, prefer it.
+# On Ubuntu 24.04 tigervnc ships `xtigervncpasswd` (not `vncpasswd`). Always
+# prefer the real binary (it produces a file Xtigervnc actually accepts);
+# fall back to the embedded Python rfb::obfuscate() only if neither exists.
 if [[ "$VNC_PASS1" != "__reuse__" ]]; then
-VNCPASSWD="$(command -v vncpasswd 2>/dev/null || find /usr /bin /opt /sbin -name vncpasswd -type f 2>/dev/null | head -1)"
+VNCPASSWD="$(command -v xtigervncpasswd 2>/dev/null || command -v vncpasswd 2>/dev/null || \
+             find /usr /bin /opt /sbin -name 'xtigervncpasswd' -type f 2>/dev/null | head -1 || \
+             find /usr /bin /opt /sbin -name 'vncpasswd' -type f 2>/dev/null | head -1)"
 if [[ -n "$VNCPASSWD" && -x "$VNCPASSWD" ]]; then
   info "Using system vncpasswd: $VNCPASSWD"
-  echo "$VNC_PASS1" | "$VNCPASSWD" -f > "$VNC_DIR/passwd"
+  printf '%s' "$VNC_PASS1" | "$VNCPASSWD" -f > "$VNC_DIR/passwd"
 else
   info "Generating VNC passwd via embedded Python (rfb::obfuscate)..."
   cat > /tmp/vnc_obfuscate.py <<'PYEOF'
