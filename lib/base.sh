@@ -28,10 +28,11 @@ info "Stopping any existing desktop session for '$USERNAME' (reinstall-safe)..."
 # a stale websockify that would hold port 6080.
 systemctl stop "user@$(id -u "$USERNAME").service" >/dev/null 2>&1 || true
 runuser -u "$USERNAME" -- systemctl --user stop novnc-desktop.service >/dev/null 2>&1 || true
-pkill -u "$USERNAME" -f 'start-novnc.sh' >/dev/null 2>&1 || true
-pkill -u "$USERNAME" websockify >/dev/null 2>&1 || true
+pkill -9 -f 'start-novnc.sh' >/dev/null 2>&1 || true
+pkill -9 -f 'websockify' >/dev/null 2>&1 || true
+pkill -9 -f 'novnc_proxy' >/dev/null 2>&1 || true
 runuser -u "$USERNAME" -- vncserver -kill :1 >/dev/null 2>&1 || true
-pkill -u "$USERNAME" Xtigervnc >/dev/null 2>&1 || true
+pkill -9 -f 'Xtigervnc' >/dev/null 2>&1 || true
 rm -f "/tmp/.X1-lock" "/tmp/.X11-unix/X1" 2>/dev/null || true
 
 export DEBIAN_FRONTEND=noninteractive
