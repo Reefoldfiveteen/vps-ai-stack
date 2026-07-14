@@ -47,7 +47,7 @@ Then pick a menu option:
 | `1` | Install base system (LXQt + TigerVNC + noVNC + swap + UFW) |
 | `2` | Install Hermes Agent (download + deps only) |
 | `3` | Install 9Router (`npm install -g`, runs as your user) |
-| `4` | Install Brave Browser (official apt repo) |
+| `4` | Install Browser — choose **Brave** or **Firefox** (Firefox uses Mozilla's apt repo, avoiding Ubuntu's snap) |
 | `5` | Install everything (1 → 2 → 3 → 4) |
 | `6` | Print the access & security guide |
 | `7` | Restart all services (novnc-desktop, 9router) |
@@ -55,6 +55,10 @@ Then pick a menu option:
 | `9` | Configure VNC access: SSH tunnel (127.0.0.1) vs public IP (0.0.0.0) |
 | `10` | Exit |
 
+> During **base install (option `1`)** you are also prompted for the access
+> method (SSH tunnel vs public IP); this writes `/etc/vps-ai-stack/vnc.conf`
+> and configures UFW accordingly. Menu `[9]` can change it later.
+>
 > **`[9] Configure VNC Access`** toggles where noVNC listens. Default is
 > `127.0.0.1` (SSH tunnel only). Choosing public IP binds `0.0.0.0`, opens
 > port `6080` in UFW, and exposes VNC in **plaintext** — only do this if you

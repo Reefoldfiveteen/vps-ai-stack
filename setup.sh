@@ -69,7 +69,7 @@ show_menu() {
   echo "  [1] Install Base System (LXQt + TigerVNC + noVNC + swap + UFW)"
   echo "  [2] Install Hermes Agent (download + deps only)"
   echo "  [3] Install 9Router (npm install only)"
-  echo "  [4] Install Brave Browser"
+  echo "  [4] Install Browser (Brave / Firefox)"
   echo "  [5] Install All (1 -> 2 -> 3 -> 4)"
   echo "  [6] Print Access & Security Guide"
   echo "  [7] Restart All Services (novnc-desktop, 9router)"
@@ -87,10 +87,10 @@ while true; do
     2) bash "$LIB_DIR/hermes.sh" ;;
     3) bash "$LIB_DIR/9router.sh" ;;
     4)
-      bash "$LIB_DIR/brave.sh"
+      bash "$LIB_DIR/browser.sh"
       ;;
     5)
-      for s in base hermes 9router brave; do
+      for s in base hermes 9router browser; do
         info "=== step: $s ==="
         if bash "$LIB_DIR/$s.sh"; then
           ok "$s complete"

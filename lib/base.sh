@@ -175,10 +175,28 @@ chown -R "$USERNAME":"$USERNAME" "$USER_HOME/.config"
 VNCSERVER_BIN="$(command -v vncserver 2>/dev/null || find /usr /bin /opt -name vncserver -type f 2>/dev/null | head -1 || echo /usr/bin/vncserver)"
 WEBSOCKIFY_BIN="$(command -v websockify 2>/dev/null || find /usr /bin /opt -name websockify -type f 2>/dev/null | head -1 || echo /usr/bin/websockify)"
 
-# Config directory for VNC bind address (toggled by access.sh)
+# Config directory for VNC bind address (toggled later by access.sh / menu [9])
 CONF_DIR="/etc/vps-ai-stack"
 mkdir -p "$CONF_DIR"
-echo "VNC_BIND=127.0.0.1" > "$CONF_DIR/vnc.conf"
+
+echo
+echo "Remote desktop access method:"
+echo "  [1] SSH tunnel only (127.0.0.1)  [RECOMMENDED - nothing exposed to the internet]"
+echo "  [2] Public IP (0.0.0.0)          [exposes port 6080 in plaintext - only if you accept the risk]"
+read -r -p "Select access method [1]: " ACCESS
+ACCESS="${ACCESS:-1}"
+if [[ "$ACCESS" == "2" ]]; then
+  VNC_BIND="0.0.0.0"
+  warn "VNC will bind 0.0.0.0:6080 (plaintext, exposed). Open port 6080 in the Azure NSG too; prefer the SSH tunnel unless required."
+  ufw allow 6080/tcp comment 'noVNC public' >/dev/null 2>&1 || true
+  ufw --force enable >/dev/null 2>&1 || true
+else
+  VNC_BIND="127.0.0.1"
+  info "VNC will bind 127.0.0.1:6080 - access via SSH tunnel: ssh -L 6080:127.0.0.1:6080 $USERNAME@<VPS_IP>"
+  ufw delete allow 6080/tcp >/dev/null 2>&1 || true
+  ufw --force enable >/dev/null 2>&1 || true
+fi
+echo "VNC_BIND=$VNC_BIND" > "$CONF_DIR/vnc.conf"
 chmod 644 "$CONF_DIR/vnc.conf"
 
 cat > "$SERVICE_DIR/novnc-desktop.service" <<EOF
