@@ -58,14 +58,19 @@ ensure_vnc() {
   log "vnc not up on $VNC_PORT, starting $VNCSERVER $VNC_DISPLAY"
   "$VNCSERVER" -kill "$VNC_DISPLAY" >>"$LOG" 2>&1 || true
   rm -f "/tmp/.X${VNC_DISPLAY#:}-lock" "/tmp/.X11-unix/X${VNC_DISPLAY#:}" 2>/dev/null || true
-  # Log output (do NOT discard) and bound the start so a stuck vncserver
-  # cannot hang the launcher forever.
-  timeout 30 "$VNCSERVER" "$VNC_DISPLAY" -geometry 1280x720 -depth 24 >>"$LOG" 2>&1 || \
-    log "vncserver exited with code $? (see log above)"
-  if port_up "$VNC_PORT"; then
-    log "vnc up"
-    return 0
-  fi
+  # IMPORTANT: on slow/low-RAM boxes the perl `vncserver` wrapper can BLOCK
+  # and never return (it waits for Xtigervnc to be ready). So we launch it in
+  # the BACKGROUND and poll the port instead of waiting for it to exit.
+  nohup "$VNCSERVER" "$VNC_DISPLAY" -geometry 1280x720 -depth 24 >>"$LOG" 2>&1 &
+  local i=0
+  while (( i++ < 150 )); do
+    if port_up "$VNC_PORT"; then
+      log "vnc up"
+      return 0
+    fi
+    sleep 1
+  done
+  log "vnc still not up after 150s"
   return 1
 }
 
