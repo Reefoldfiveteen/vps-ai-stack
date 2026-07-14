@@ -13,7 +13,9 @@ VNC_PORT="5901"
 NOVNC_WEB="/opt/novnc"
 LISTEN_PORT="6080"
 CONF="/etc/vps-ai-stack/vnc.conf"
-LOG="/tmp/vps-ai-stack-novnc.log"
+# Per-user log so a root-owned /tmp log (from a previous sudo redirect) can
+# never block the launcher.
+LOG="/tmp/vps-ai-stack-novnc.$(id -u).log"
 
 # Read VNC_BIND (default localhost only)
 VNC_BIND="127.0.0.1"
