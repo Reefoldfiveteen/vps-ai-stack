@@ -24,6 +24,9 @@ err(){ echo -e "${RED}[-]${NC} $*"; }
 
 # ---- Kill any stale desktop session for this user (avoids :1 lock on reinstall) ----
 info "Stopping any existing desktop session for '$USERNAME' (reinstall-safe)..."
+# Stop the user manager entirely so the OLD systemd service cannot respawn
+# a stale websockify that would hold port 6080.
+systemctl stop "user@$(id -u "$USERNAME").service" >/dev/null 2>&1 || true
 runuser -u "$USERNAME" -- systemctl --user stop novnc-desktop.service >/dev/null 2>&1 || true
 pkill -u "$USERNAME" -f 'start-novnc.sh' >/dev/null 2>&1 || true
 pkill -u "$USERNAME" websockify >/dev/null 2>&1 || true
