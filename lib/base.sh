@@ -58,12 +58,18 @@ tar -xzf /tmp/novnc.tar.gz -C /tmp
 cp -r /tmp/noVNC-1.4.0/* "$NOVNC_DIR/"
 # websockify is installed via apt (git submodule not in release tarball)
 
-# ---- Swap (50% RAM, capped 512M-2G) ----
-TOTAL_RAM_KB=$(awk '/MemTotal/{print $2}' /proc/meminfo)
-SWAP_TARGET_KB=$(( TOTAL_RAM_KB / 2 ))
-# floor 512M, cap 2G
-(( SWAP_TARGET_KB < 524288 )) && SWAP_TARGET_KB=524288
-(( SWAP_TARGET_KB > 2097152 )) && SWAP_TARGET_KB=2097152
+# ---- Swap (user choice, default 2 GB) ----
+DEFAULT_SWAP_MB=2048
+read -r -p "Swap size in MB (Enter=${DEFAULT_SWAP_MB}, min 512, max 4096) [${DEFAULT_SWAP_MB}]: " SWAP_MB
+SWAP_MB="${SWAP_MB:-$DEFAULT_SWAP_MB}"
+if ! [[ "$SWAP_MB" =~ ^[0-9]+$ ]]; then
+  warn "Invalid input, using default ${DEFAULT_SWAP_MB} MB."
+  SWAP_MB=$DEFAULT_SWAP_MB
+fi
+(( SWAP_MB < 512 )) && SWAP_MB=512
+(( SWAP_MB > 4096 )) && SWAP_MB=4096
+SWAP_TARGET_KB=$(( SWAP_MB * 1024 ))
+info "Swap target: ${SWAP_MB} MB"
 if swapon --show | grep -q "/swapfile"; then
   warn "Swapfile already active, skipping."
 else

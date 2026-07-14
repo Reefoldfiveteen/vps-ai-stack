@@ -37,10 +37,11 @@ echo
 echo "Choose swap size to ADD:"
 echo "  [a] Auto (${AUTO_MB}M)"
 echo "  [1] 1G"
-echo "  [2] 2G"
+echo "  [2] 2G (default)"
 echo "  [4] 4G"
 echo "  [8] 8G"
-read -r -p "Selection [a/1/2/4/8]: " SEL
+read -r -p "Selection [a/1/2/4/8] (default 2G): " SEL
+SEL="${SEL:-2}"
 
 case "$SEL" in
   a|A) SIZE_MB=$AUTO_MB ;;
@@ -48,7 +49,7 @@ case "$SEL" in
   2)   SIZE_MB=2048 ;;
   4)   SIZE_MB=4096 ;;
   8)   SIZE_MB=8192 ;;
-  *)   warn "Invalid selection, using auto (${AUTO_MB}M)."; SIZE_MB=$AUTO_MB ;;
+  *)   warn "Invalid selection, using default 2G."; SIZE_MB=2048 ;;
 esac
 
 ACTIVE="$(active_swaps)"
