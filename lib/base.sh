@@ -17,6 +17,12 @@ if ! id "$USERNAME" &>/dev/null; then
 fi
 export SETUP_USER="$USERNAME"
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; BLUE='\033[0;34m'; NC='\033[0m'
+
+# ---- Kill any stale desktop session for this user (avoids :1 lock on reinstall) ----
+info "Stopping any existing desktop session for '$USERNAME' (reinstall-safe)..."
+su - "$USERNAME" -c 'vncserver -kill :1 >/dev/null 2>&1' || true
+pkill -u "$USERNAME" Xtigervnc >/dev/null 2>&1 || true
+rm -f "/tmp/.X1-lock" "/tmp/.X11-unix/X1" 2>/dev/null || true
 info(){ echo -e "${BLUE}[*]${NC} $*"; }
 ok(){ echo -e "${GREEN}[+]${NC} $*"; }
 warn(){ echo -e "${YELLOW}[!]${NC} $*"; }
@@ -64,27 +70,39 @@ fi
 ok "Swap ready: $(swapon --show=SIZE --noheadings | tr -d ' ')"
 
 # ---- VNC password ----
-info "Setting VNC password for user '$USERNAME'..."
-while true; do
-  read -r -s -p "Enter VNC password (6-8 chars): " VNC_PASS1
-  echo
-  read -r -s -p "Confirm VNC password: " VNC_PASS2
-  echo
-  if [[ "$VNC_PASS1" != "$VNC_PASS2" ]]; then
-    warn "Passwords do not match. Try again."
-    continue
-  fi
-  if [[ ${#VNC_PASS1} -lt 6 || ${#VNC_PASS1} -gt 8 ]]; then
-    warn "Password must be 6-8 characters."
-    continue
-  fi
-  break
-done
-
 USER_HOME=$(eval echo ~"$USERNAME")
 VNC_DIR="$USER_HOME/.vnc"
 mkdir -p "$VNC_DIR"
 chown "$USERNAME":"$USERNAME" "$VNC_DIR"
+
+if [[ -s "$VNC_DIR/passwd" ]]; then
+  ok "Reusing existing VNC passwd ($VNC_DIR/passwd)."
+  # Still need the plaintext for nothing here; the file is already valid.
+  VNC_PASS1="__reuse__"
+else
+  info "Setting VNC password for user '$USERNAME'..."
+  ATTEMPTS=0
+  while (( ATTEMPTS < 5 )); do
+    ATTEMPTS=$((ATTEMPTS+1))
+    read -r -s -p "Enter VNC password (6-8 chars): " VNC_PASS1
+    echo
+    read -r -s -p "Confirm VNC password: " VNC_PASS2
+    echo
+    if [[ "$VNC_PASS1" != "$VNC_PASS2" ]]; then
+      warn "Passwords do not match. Try again ($ATTEMPTS/5)."
+      continue
+    fi
+    if [[ ${#VNC_PASS1} -lt 6 || ${#VNC_PASS1} -gt 8 ]]; then
+      warn "Password must be 6-8 characters. Try again ($ATTEMPTS/5)."
+      continue
+    fi
+    break
+  done
+  if (( ATTEMPTS >= 5 )); then
+    err "Too many failed attempts. Aborting base install."
+    exit 1
+  fi
+fi
 
 # ---- Create VNC passwd file ----
 # vncpasswd binary is NOT shipped by tigervnc-* on Ubuntu 24.04, so we
@@ -93,6 +111,7 @@ chown "$USERNAME":"$USERNAME" "$VNC_DIR"
 #   {23,82,107,6,35,78,88,7}, no IV, no padding -> 8-byte ~/.vnc/passwd.
 # Verified against the FIPS-46 DES test vector (matches TigerVNC/d3des).
 # If a real vncpasswd exists on another distro, prefer it.
+if [[ "$VNC_PASS1" != "__reuse__" ]]; then
 VNCPASSWD="$(command -v vncpasswd 2>/dev/null || find /usr /bin /opt /sbin -name vncpasswd -type f 2>/dev/null | head -1)"
 if [[ -n "$VNCPASSWD" && -x "$VNCPASSWD" ]]; then
   info "Using system vncpasswd: $VNCPASSWD"
@@ -175,6 +194,7 @@ PYEOF
   python3 /tmp/vnc_obfuscate.py "$VNC_PASS1" > "$VNC_DIR/passwd"
   rm -f /tmp/vnc_obfuscate.py
 fi
+fi
 chmod 600 "$VNC_DIR/passwd"
 chown "$USERNAME":"$USERNAME" "$VNC_DIR/passwd"
 ok "VNC passwd file written ($(stat -c%s "$VNC_DIR/passwd") bytes)"
@@ -253,7 +273,7 @@ chown -R "$USERNAME":"$USERNAME" "$USER_HOME/.config"
 # Best-effort: start the user manager + service now (needs a running user bus)
 export XDG_RUNTIME_DIR="/run/user/$(id -u "$USERNAME")"
 systemctl start "user@$(id -u "$USERNAME").service" >/dev/null 2>&1 || true
-if su - "$USERNAME" -c "XDG_RUNTIME_DIR='$XDG_RUNTIME_DIR' systemctl --user daemon-reload >/dev/null 2>&1 && XDG_RUNTIME_DIR='$XDG_RUNTIME_DIR' systemctl --user start novnc-desktop.service >/dev/null 2>&1"; then
+if su - "$USERNAME" -c "XDG_RUNTIME_DIR='$XDG_RUNTIME_DIR' systemctl --user daemon-reload >/dev/null 2>&1 && XDG_RUNTIME_DIR='$XDG_RUNTIME_DIR' systemctl --user restart novnc-desktop.service >/dev/null 2>&1"; then
   ok "Desktop service started."
 else
   warn "Service not started now (no user bus during setup). It auto-starts after reboot (linger enabled)."
