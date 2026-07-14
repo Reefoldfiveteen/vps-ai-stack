@@ -24,7 +24,7 @@ err(){ echo -e "${RED}[-]${NC} $*"; }
 
 # ---- Kill any stale desktop session for this user (avoids :1 lock on reinstall) ----
 info "Stopping any existing desktop session for '$USERNAME' (reinstall-safe)..."
-su - "$USERNAME" -c 'vncserver -kill :1 >/dev/null 2>&1' || true
+runuser -u "$USERNAME" -- vncserver -kill :1 >/dev/null 2>&1 || true
 pkill -u "$USERNAME" Xtigervnc >/dev/null 2>&1 || true
 rm -f "/tmp/.X1-lock" "/tmp/.X11-unix/X1" 2>/dev/null || true
 
@@ -270,13 +270,34 @@ mkdir -p "$WANTS_DIR"
 ln -sf "../novnc-desktop.service" "$WANTS_DIR/novnc-desktop.service"
 chown -R "$USERNAME":"$USERNAME" "$USER_HOME/.config"
 
-# Best-effort: start the user manager + service now (needs a running user bus)
+# Best-effort: start the user manager + service now (needs a running user bus).
+# Use runuser (no login shell) + timeout so setup never hangs. If the user bus
+# is unavailable, fall back to launching the wrapper directly so :6080 comes up.
 export XDG_RUNTIME_DIR="/run/user/$(id -u "$USERNAME")"
-systemctl start "user@$(id -u "$USERNAME").service" >/dev/null 2>&1 || true
-if su - "$USERNAME" -c "XDG_RUNTIME_DIR='$XDG_RUNTIME_DIR' systemctl --user daemon-reload >/dev/null 2>&1 && XDG_RUNTIME_DIR='$XDG_RUNTIME_DIR' systemctl --user restart novnc-desktop.service >/dev/null 2>&1"; then
-  ok "Desktop service started."
-else
-  warn "Service not started now (no user bus during setup). It auto-starts after reboot (linger enabled)."
+mkdir -p "$XDG_RUNTIME_DIR"
+
+STARTED_VIA_SYSTEMD=0
+timeout 25 systemctl start "user@$(id -u "$USERNAME").service" >/dev/null 2>&1 || true
+if timeout 25 runuser -u "$USERNAME" -- env XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" \
+     systemctl --user daemon-reload >/dev/null 2>&1 && \
+   timeout 25 runuser -u "$USERNAME" -- env XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" \
+     systemctl --user restart novnc-desktop.service >/dev/null 2>&1; then
+  STARTED_VIA_SYSTEMD=1
+  ok "Desktop service started (systemd --user)."
+fi
+
+if (( STARTED_VIA_SYSTEMD == 0 )); then
+  warn "systemd --user unavailable during setup — launching desktop directly (not persistent)."
+  warn "It will also start on next reboot (linger enabled)."
+  runuser -u "$USERNAME" -- env XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" \
+    setsid bash -c 'exec /opt/vps-ai-stack/start-novnc.sh' >/dev/null 2>&1 < /dev/null &
+  sleep 3
+  if runuser -u "$USERNAME" -- env XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" \
+       bash -c 'exec 3<>"/dev/tcp/127.0.0.1/6080"; exec 3>&-' 2>/dev/null; then
+    ok "Desktop is up on 127.0.0.1:6080 (direct launch)."
+  else
+    err "Desktop did not come up. Check /tmp/vps-ai-stack-novnc.log"
+  fi
 fi
 
 # ---- UFW ----
