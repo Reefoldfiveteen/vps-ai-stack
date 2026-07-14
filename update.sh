@@ -40,6 +40,13 @@ info "Committing: $MSG"
 git commit -q -m "$MSG"
 
 info "Pushing to origin/$BRANCH..."
-git push origin "$BRANCH"
-
-ok "Pushed to GitHub: $(git remote get-url origin)"
+if git push -u origin "$BRANCH"; then
+  ok "Pushed to GitHub: $(git remote get-url origin)"
+else
+  warn "Normal push rejected — the remote history diverged (remote was likely force-pushed)."
+  warn "Re-fetching, then force-pushing WITH LEASE to upload your local history."
+  warn "(This overwrites the remote branch with your local commits; your local work is kept.)"
+  git fetch origin "$BRANCH" || true
+  git push --force-with-lease -u origin "$BRANCH"
+  ok "Force-pushed to GitHub: $(git remote get-url origin)"
+fi
