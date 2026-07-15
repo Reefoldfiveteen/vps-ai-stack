@@ -31,7 +31,7 @@ mkdir -p "$BACKUP_DIR"
 chown "$USERNAME":"$USERNAME" "$BACKUP_DIR" 2>/dev/null || true
 
 # Candidate data directories for each app (any that exist are backed up).
-HERMES_DIRS=("$USER_HOME/.hermes" "$USER_HOME/.config/hermes" "$USER_HOME/.local/share/hermes" "$USER_HOME/.cache/hermes" "$USER_HOME/.local/state/hermes")
+HERMES_DIRS=("$USER_HOME/.hermes" "$USER_HOME/.config/hermes" "$USER_HOME/.local/share/hermes" "$USER_HOME/.cache/hermes" "$USER_HOME/.local/state/hermes" "$USER_HOME/HERMES")
 NINEROUTER_DIRS=("$USER_HOME/.config/9router" "$USER_HOME/.9router" "$USER_HOME/.local/share/9router" "$USER_HOME/.config/9Router")
 
 rel_paths() {
