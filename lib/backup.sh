@@ -3,7 +3,7 @@
 # vps-ai-stack/lib/backup.sh
 # Backup & restore settings/data for Hermes Agent and 9Router.
 # Data lives under the user's home (~/.hermes, ~/.config/...), so we tar it.
-# Backups are stored in /opt/vps-ai-stack/backups as timestamped tarballs.
+# Backups are stored in the user's home (~<user>/backup) as timestamped tarballs.
 #
 set -u
 
@@ -26,8 +26,9 @@ warn(){ echo -e "${YELLOW}[!]${NC} $*"; }
 err(){ echo -e "${RED}[-]${NC} $*"; }
 
 USER_HOME=$(eval echo ~"$USERNAME")
-BACKUP_DIR="/opt/vps-ai-stack/backups"
+BACKUP_DIR="$USER_HOME/backup"
 mkdir -p "$BACKUP_DIR"
+chown "$USERNAME":"$USERNAME" "$BACKUP_DIR" 2>/dev/null || true
 
 # Candidate data directories for each app (any that exist are backed up).
 HERMES_DIRS=("$USER_HOME/.hermes" "$USER_HOME/.config/hermes" "$USER_HOME/.local/share/hermes")
