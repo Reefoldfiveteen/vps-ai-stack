@@ -53,7 +53,8 @@ Then pick a menu option:
 | `7` | Restart all services (novnc-desktop, 9router) |
 | `8` | Configure swap size (interactive) |
 | `9` | Configure VNC access: SSH tunnel (127.0.0.1) vs public IP (0.0.0.0) |
-| `10` | Exit |
+| `10` | Backup & Restore — Hermes + 9Router → `~/backup` |
+| `11` | Exit |
 
 > During **base install (option `1`)** you are also prompted for the access
 > method (SSH tunnel vs public IP); this writes `/etc/vps-ai-stack/vnc.conf`
@@ -78,7 +79,7 @@ After install, a reboot is recommended so the per-user systemd services start cl
 noVNC is **not** exposed to the internet. From your laptop, open an SSH tunnel:
 
 ```bash
-ssh -o ServerAliveInterval=30 -o ServerAliveCountMax=10 -L 6080:localhost:6080 reefii@<VPS_IP>
+ssh -o ServerAliveInterval=30 -o ServerAliveCountMax=10 -L 6080:127.0.0.1:6080 reefii@<VPS_IP>
 ```
 
 > **Keep the tunnel alive.** Add the `-o ServerAliveInterval=30` flags above (or
@@ -118,7 +119,7 @@ No reinstall is required — only the running desktop needs a restart.
 Forward its dashboard port too (or open it inside the noVNC browser):
 
 ```bash
-ssh -L 20128:localhost:20128 reefii@<VPS_IP>
+ssh -L 20128:127.0.0.1:20128 reefii@<VPS_IP>
 ```
 
 Open `http://localhost:20128/dashboard` and connect providers (Kiro AI, OpenCode
@@ -132,6 +133,37 @@ Inside the noVNC desktop terminal:
 hermes            # start chatting
 hermes model      # pick a provider — point it at 9Router: http://localhost:20128/v1
 hermes setup      # full setup wizard
+```
+
+## Backup & Restore
+
+Menu **`[10]`** backs up and restores your Hermes Agent and 9Router data.
+Backups are stored in the **target user's home**, under `~/backup`, as
+timestamped tarballs (e.g. `hermes-reefii-20260716-1530.tar.gz`).
+
+```bash
+# From menu [10] on the VPS:
+#   [1] Backup Hermes      [2] Backup 9Router
+#   [3] Backup both        [4] List backups
+#   [5] Restore Hermes     [6] Restore 9Router
+```
+
+What gets backed up:
+
+- **Hermes** — `~/.hermes` (settings, API keys, Telegram token, chat
+  history `.hermes_history`, sessions, plugins), `~/.local/state/hermes`,
+  and `~/HERMES` (your Hermes workspace).
+- **9Router** — `~/.config/9router`, `~/.9router`, `~/.local/share/9router`,
+  `~/.config/9Router`.
+
+> **Note:** `~/.local/bin/hermes` (the executable) is intentionally *not*
+> backed up — it is recreated by the Hermes installer (`lib/hermes.sh`).
+
+To download a backup to your laptop:
+
+```bash
+ssh reefii@<VPS_IP> "ls -lh ~/backup/"
+scp reefii@<VPS_IP>:~/backup/<file>.tar.gz .
 ```
 
 ## Service management
@@ -151,7 +183,7 @@ If the user bus is unavailable (e.g. before the first reboot, or a host where
 
 ```bash
 sudo bash start-services.sh reefii
-# tunnel: ssh -L 6080:localhost:6080 -L 20128:localhost:20128 reefii@<VPS_IP>
+# tunnel: ssh -L 6080:127.0.0.1:6080 -L 20128:127.0.0.1:20128 reefii@<VPS_IP>
 ```
 
 After a reboot the systemd services come up on their own (linger is enabled).
