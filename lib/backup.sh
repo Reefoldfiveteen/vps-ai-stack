@@ -38,6 +38,13 @@ NINEROUTER_DIRS=("$USER_HOME/.config/9router" "$USER_HOME/.9router" "$USER_HOME/
 FULL_HERMES_DIRS=("$USER_HOME/.hermes" "$USER_HOME/.local/state/hermes")
 FULL_NINEROUTER_DIRS=("$USER_HOME/.config/9router" "$USER_HOME/.9router" "$USER_HOME/.local/share/9router" "$USER_HOME/.config/9Router" "$USER_HOME/9Router")
 
+# ---- Config ----
+BACKUP_CONF="$BACKUP_DIR/.backup.conf"
+BACKUP_KEEP=5
+if [ -f "$BACKUP_CONF" ]; then
+  source "$BACKUP_CONF"
+fi
+
 # ====================================================================
 # UTILITY
 # ====================================================================
@@ -233,6 +240,10 @@ do_full_backup() {
   [ "$(tar -tzf "$archive_path" | wc -l)" -gt 30 ] && echo "  ... (truncated)"
 
   rm -rf "$work_dir"
+
+  # Cleanup — keep only last N full backups
+  cleanup_old_backups
+  cleanup_gdrive_backups
 }
 
 # ====================================================================
@@ -673,6 +684,82 @@ list_backups() {
 }
 
 # ====================================================================
+# CLEANUP — keep only last N full backups
+# ====================================================================
+
+save_backup_keep() {
+  echo "BACKUP_KEEP=$BACKUP_KEEP" > "$BACKUP_CONF"
+  chown "$USERNAME":"$USERNAME" "$BACKUP_CONF" 2>/dev/null || true
+}
+
+cleanup_old_backups() {
+  local pattern="full-${USERNAME}-*.tar.gz"
+  local all; all=($(ls -t "$BACKUP_DIR"/$pattern 2>/dev/null))
+  local count=${#all[@]}
+  local keep=${BACKUP_KEEP:-5}
+
+  if [ "$count" -le "$keep" ]; then
+    return 0
+  fi
+
+  info "Local cleanup: $count full backups, keeping $keep..."
+  local deleted=0
+  for ((i=keep; i<count; i++)); do
+    rm -f "${all[$i]}"
+    info "  Deleted: $(basename "${all[$i]}")"
+    ((deleted++))
+  done
+  ok "Local cleanup done — removed $deleted old backup(s)"
+}
+
+cleanup_gdrive_backups() {
+  local keep=${BACKUP_KEEP:-5}
+
+  if ! command -v gdrive &>/dev/null; then
+    return 0
+  fi
+
+  # Find folder ID
+  local folder_id
+  folder_id="$(run_as_user "gdrive files list --skip-header --query \"name='AI_Stack_Backup' and mimeType='application/vnd.google-apps.folder' and trashed=false\" --field-separator '|' --max 10 2>/dev/null" | head -1 | cut -d'|' -f1)"
+  if [[ -z "$folder_id" ]]; then
+    return 0
+  fi
+
+  # List backup files in GDrive folder, sorted by name (desc = newest first)
+  local files
+  files="$(run_as_user "gdrive files list --parent '$folder_id' --skip-header --order-by 'name desc' --field-separator '|' --max 50 2>/dev/null" | grep "full-${USERNAME}-.*tar\.gz" | head -50)"
+  if [[ -z "$files" ]]; then
+    return 0
+  fi
+
+  local total; total="$(echo "$files" | wc -l)"
+  if [ "$total" -le "$keep" ]; then
+    return 0
+  fi
+
+  info "GDrive cleanup: $total backups, keeping $keep..."
+  local deleted=0
+  while IFS='|' read -r fid fname rest; do
+    run_as_user "gdrive files delete '$fid' 2>/dev/null" && info "  Deleted: $fname" && ((deleted++))
+  done <<< "$(echo "$files" | tail -n +$((keep + 1)))"
+  ok "GDrive cleanup done — removed $deleted old backup(s)"
+}
+
+configure_keep_count() {
+  echo
+  echo "Current keep count: ${BACKUP_KEEP:-5}"
+  read -r -p "New keep count (minimum 1, default 5): " NEW_KEEP
+  NEW_KEEP="${NEW_KEEP:-5}"
+  if [[ "$NEW_KEEP" -lt 1 ]]; then
+    NEW_KEEP=5
+  fi
+  BACKUP_KEEP="$NEW_KEEP"
+  save_backup_keep
+  ok "Keep count set to $BACKUP_KEEP. Only last $BACKUP_KEEP full backups will be kept."
+}
+
+# ====================================================================
 # NON-INTERACTIVE FULL BACKUP (called by cron)
 # ====================================================================
 
@@ -700,6 +787,8 @@ while true; do
   echo "  [8] Full Restore (newest full backup)"
   echo "  [9] Upload latest backup to Google Drive"
   echo "  [0] Configure Auto-Backup (cron)"
+  echo "  [c] Cleanup old full backups (keep last ${BACKUP_KEEP:-5})"
+  echo "  [k] Change keep count (current: ${BACKUP_KEEP:-5})"
   echo "  [e] Exit"
   echo
   read -r -p "Select option: " C
@@ -713,7 +802,9 @@ while true; do
     7) do_full_backup ;;
     8) do_full_restore ;;
     9) upload_to_gdrive ;;
-    0) setup_auto_backup ;;
+     0) setup_auto_backup ;;
+    c|C) cleanup_old_backups; cleanup_gdrive_backups ;;
+    k|K) configure_keep_count ;;
     e|E) ok "Goodbye."; exit 0 ;;
     *) warn "Invalid option." ;;
   esac
