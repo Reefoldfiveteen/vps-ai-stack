@@ -493,61 +493,56 @@ install_gdrive() {
     ok "gdrive CLI already installed: $(gdrive version 2>/dev/null | head -1)"
     return 0
   fi
-  info "Installing gdrive CLI (prasmussen)..."
-  local gdrive_url="https://github.com/prasmussen/gdrive/releases/download/2.1.1/gdrive_2.1.1_linux_amd64.tar.gz"
+  info "Installing gdrive CLI (glotlabs/gdrive v3.9.1)..."
+  local gdrive_url="https://github.com/glotlabs/gdrive/releases/download/3.9.1/gdrive_linux-x64.tar.gz"
   local tmp_dir="/tmp/gdrive-install-$$"
   mkdir -p "$tmp_dir" || return 1
   cd "$tmp_dir" || return 1
 
-  # Download — try wget, fallback curl, error if neither
   if command -v wget &>/dev/null; then
     wget -q "$gdrive_url" -O gdrive.tar.gz || { err "wget download failed"; rm -rf "$tmp_dir"; return 1; }
   elif command -v curl &>/dev/null; then
     curl -sL "$gdrive_url" -o gdrive.tar.gz || { err "curl download failed"; rm -rf "$tmp_dir"; return 1; }
   else
-    err "Neither wget nor curl available. Install one of them first."
+    err "Neither wget nor curl available."
     rm -rf "$tmp_dir"
     return 1
   fi
 
-  # Verify download
   if [ ! -s gdrive.tar.gz ]; then
-    err "Downloaded file is empty. Check internet or URL: $gdrive_url"
+    err "Downloaded file is empty."
     rm -rf "$tmp_dir"
     return 1
   fi
 
-  # Extract
-  tar -xzf gdrive.tar.gz || { err "Failed to extract gdrive.tar.gz (corrupt download?)"; rm -rf "$tmp_dir"; return 1; }
+  tar -xzf gdrive.tar.gz || { err "Extract failed (corrupt download?)"; rm -rf "$tmp_dir"; return 1; }
 
+  # Binary name in glotlabs tarball is just "gdrive"
   if [ ! -f gdrive ]; then
     err "gdrive binary not found in extracted archive."
     rm -rf "$tmp_dir"
     return 1
   fi
 
-  # Install
   if mv gdrive /usr/local/bin/gdrive 2>/dev/null; then
     chmod +x /usr/local/bin/gdrive
   elif mv gdrive /usr/bin/gdrive 2>/dev/null; then
     chmod +x /usr/bin/gdrive
   else
-    err "Cannot install gdrive — no write permission to /usr/local/bin or /usr/bin"
+    err "No write permission to /usr/local/bin or /usr/bin"
     rm -rf "$tmp_dir"
     return 1
   fi
 
   rm -rf "$tmp_dir"
 
-  # Verify
   if ! command -v gdrive &>/dev/null; then
-    err "gdrive installed but not found in PATH. Try: export PATH=\$PATH:/usr/local/bin"
+    err "gdrive installed but not in PATH. Try: export PATH=\$PATH:/usr/local/bin"
     return 1
   fi
 
   ok "gdrive CLI installed: $(gdrive version 2>/dev/null | head -1)"
-  warn "You must authenticate gdrive once: run 'sudo -u $USERNAME gdrive about' as $USERNAME, paste the OAuth URL into a browser, copy the verification code, and paste it back."
-  warn "Upload will work only after authentication."
+  warn "Authenticate once: run 'gdrive account add' as $USERNAME, follow URL, paste code."
 }
 
 upload_to_gdrive() {
@@ -564,20 +559,19 @@ upload_to_gdrive() {
     install_gdrive || return 1
   fi
 
-  if ! run_as_user "gdrive about 2>/dev/null" | grep -q "Account:"; then
-    warn "gdrive is not authenticated. Run 'gdrive about' as $USERNAME and complete OAuth first."
-    warn "  sudo -u $USERNAME gdrive about"
-    info "Follow the URL, paste verification code, then re-run upload."
+  if ! run_as_user "gdrive files list --max 1 2>/dev/null" >/dev/null; then
+    warn "gdrive not authenticated. Run: sudo -u $USERNAME gdrive account add"
+    info "Follow URL, paste verification code, then re-run upload."
     return 1
   fi
 
   local folder_name="AI_Stack_Backup"
   local folder_id
 
-  folder_id="$(run_as_user "gdrive list --query \"name='${folder_name}' and mimeType='application/vnd.google-apps.folder' and trashed=false\" 2>/dev/null" | awk 'NR==2{print $1}')"
+  folder_id="$(run_as_user "gdrive files list --query \"name='${folder_name}' and mimeType='application/vnd.google-apps.folder' and trashed=false\" --field-separator '|' --max 10 2>/dev/null" | grep "^[^|]*|" | head -1 | cut -d'|' -f1)"
   if [[ -z "$folder_id" ]]; then
     info "Creating '${folder_name}' folder on Google Drive..."
-    folder_id="$(run_as_user "gdrive mkdir '${folder_name}' 2>/dev/null" | awk '{print $NF}')"
+    folder_id="$(run_as_user "gdrive files mkdir --print-only-id '${folder_name}' 2>/dev/null")"
     if [[ -z "$folder_id" ]]; then
       err "Failed to create folder on Google Drive."
       return 1
@@ -588,7 +582,7 @@ upload_to_gdrive() {
   fi
 
   info "Uploading '$(basename "$tarball")' to '${folder_name}'..."
-  run_as_user "gdrive upload --parent '${folder_id}' '$tarball' 2>&1"
+  run_as_user "gdrive files upload --parent '${folder_id}' '$tarball' 2>&1"
   ok "Upload complete: $(basename "$tarball") -> Google Drive /${folder_name}/"
 }
 
@@ -618,7 +612,8 @@ if command -v gdrive &>/dev/null; then
   LATEST=\$(ls -t "\$BACKUP_DIR"/full-*.tar.gz 2>/dev/null | head -1)
   if [ -n "\$LATEST" ]; then
     if ! grep -q "\$(basename "\$LATEST")" "\$LOG" 2>/dev/null; then
-      gdrive upload --parent "\$(gdrive list --query "name='AI_Stack_Backup' and mimeType='application/vnd.google-apps.folder' and trashed=false" 2>/dev/null | awk 'NR==2{print \$1}')" "\$LATEST" >> "\$LOG" 2>&1
+      FOLDER_ID=\$(gdrive files list --query "name='AI_Stack_Backup' and mimeType='application/vnd.google-apps.folder' and trashed=false" --field-separator '|' --max 10 2>/dev/null | grep "^[^|]*|" | head -1 | cut -d'|' -f1)
+      [ -n "\$FOLDER_ID" ] && gdrive files upload --parent "\$FOLDER_ID" "\$LATEST" >> "\$LOG" 2>&1
       echo "[\$?] Upload done: \$(basename "\$LATEST")" >> "\$LOG"
     fi
   fi
