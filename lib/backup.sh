@@ -568,7 +568,7 @@ upload_to_gdrive() {
   local folder_name="AI_Stack_Backup"
   local folder_id
 
-  folder_id="$(run_as_user "gdrive files list --query \"name='${folder_name}' and mimeType='application/vnd.google-apps.folder' and trashed=false\" --field-separator '|' --max 10 2>/dev/null" | grep "^[^|]*|" | head -1 | cut -d'|' -f1)"
+  folder_id="$(run_as_user "gdrive files list --skip-header --query \"name='${folder_name}' and mimeType='application/vnd.google-apps.folder' and trashed=false\" --field-separator '|' --max 10 2>/dev/null" | head -1 | cut -d'|' -f1)"
   if [[ -z "$folder_id" ]]; then
     info "Creating '${folder_name}' folder on Google Drive..."
     folder_id="$(run_as_user "gdrive files mkdir --print-only-id '${folder_name}' 2>/dev/null")"
@@ -582,8 +582,12 @@ upload_to_gdrive() {
   fi
 
   info "Uploading '$(basename "$tarball")' to '${folder_name}'..."
-  run_as_user "gdrive files upload --parent '${folder_id}' '$tarball' 2>&1"
-  ok "Upload complete: $(basename "$tarball") -> Google Drive /${folder_name}/"
+  if run_as_user "gdrive files upload --parent '${folder_id}' '$tarball' 2>&1"; then
+    ok "Upload complete: $(basename "$tarball") -> Google Drive /${folder_name}/"
+  else
+    err "Upload failed."
+    return 1
+  fi
 }
 
 # ====================================================================
@@ -612,9 +616,8 @@ if command -v gdrive &>/dev/null; then
   LATEST=\$(ls -t "\$BACKUP_DIR"/full-*.tar.gz 2>/dev/null | head -1)
   if [ -n "\$LATEST" ]; then
     if ! grep -q "\$(basename "\$LATEST")" "\$LOG" 2>/dev/null; then
-      FOLDER_ID=\$(gdrive files list --query "name='AI_Stack_Backup' and mimeType='application/vnd.google-apps.folder' and trashed=false" --field-separator '|' --max 10 2>/dev/null | grep "^[^|]*|" | head -1 | cut -d'|' -f1)
-      [ -n "\$FOLDER_ID" ] && gdrive files upload --parent "\$FOLDER_ID" "\$LATEST" >> "\$LOG" 2>&1
-      echo "[\$?] Upload done: \$(basename "\$LATEST")" >> "\$LOG"
+      FOLDER_ID=\$(gdrive files list --skip-header --query "name='AI_Stack_Backup' and mimeType='application/vnd.google-apps.folder' and trashed=false" --field-separator '|' --max 10 2>/dev/null | head -1 | cut -d'|' -f1)
+      [ -n "\$FOLDER_ID" ] && gdrive files upload --parent "\$FOLDER_ID" "\$LATEST" >> "\$LOG" 2>&1 && echo "[\$?] Upload done: \$(basename "\$LATEST")" >> "\$LOG"
     fi
   fi
 fi
