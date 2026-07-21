@@ -251,13 +251,16 @@ do_full_backup() {
 # ====================================================================
 
 do_full_restore() {
-  local latest; latest="$(ls -t "$BACKUP_DIR/full-${USERNAME}-"*.tar.gz 2>/dev/null | head -1)"
+  local latest="${1:-}"
   if [[ -z "$latest" ]]; then
-    warn "No full backup found in $BACKUP_DIR."
-    return 1
+    latest="$(ls -t "$BACKUP_DIR/full-${USERNAME}-"*.tar.gz 2>/dev/null | head -1)"
+    if [[ -z "$latest" ]]; then
+      warn "No full backup found in $BACKUP_DIR."
+      return 1
+    fi
+    read -r -p "Restore full backup from: $(basename "$latest") ? [y/N]: " GO
+    [[ "$GO" =~ ^[Yy]$ ]] || { info "Aborted."; return 0; }
   fi
-  read -r -p "Restore full backup from: $(basename "$latest") ? [y/N]: " GO
-  [[ "$GO" =~ ^[Yy]$ ]] || { info "Aborted."; return 0; }
 
   local extract_dir="/tmp/restore-work-$$"
   mkdir -p "$extract_dir"
@@ -602,6 +605,86 @@ upload_to_gdrive() {
 }
 
 # ====================================================================
+# RESTORE FROM GDRIVE
+# ====================================================================
+
+gdrive_folder_id() {
+  run_as_user "gdrive files list --skip-header --query \"name='AI_Stack_Backup' and mimeType='application/vnd.google-apps.folder' and trashed=false\" --field-separator '|' --max 10 2>/dev/null" | head -1 | cut -d'|' -f1
+}
+
+restore_from_gdrive() {
+  if ! command -v gdrive &>/dev/null; then
+    warn "gdrive not installed."
+    read -r -p "Install gdrive CLI now? [y/N]: " GI
+    [[ "$GI" =~ ^[Yy]$ ]] || return 0
+    install_gdrive || return 1
+  fi
+
+  if ! run_as_user "gdrive files list --max 1 2>/dev/null" >/dev/null; then
+    warn "gdrive not authenticated. Run: sudo -u $USERNAME gdrive account add"
+    return 1
+  fi
+
+  local folder_id; folder_id="$(gdrive_folder_id)"
+  if [[ -z "$folder_id" ]]; then
+    err "No AI_Stack_Backup folder found on Google Drive."
+    return 1
+  fi
+
+  # List full backup files in GDrive
+  local files
+  files="$(run_as_user "gdrive files list --parent '$folder_id' --skip-header --order-by 'name desc' --field-separator '|' --max 50 2>/dev/null" | grep "full-${USERNAME}-.*\.tar\.gz")"
+  if [[ -z "$files" ]]; then
+    err "No full backup files found in AI_Stack_Backup folder."
+    return 1
+  fi
+
+  echo
+  echo "Available full backups in Google Drive (AI_Stack_Backup):"
+  local i=1
+  local ids=() names=()
+  while IFS='|' read -r fid fname rest; do
+    echo "  [$i] $fname"
+    ids+=("$fid")
+    names+=("$fname")
+    ((i++))
+  done <<< "$files"
+
+  echo
+  read -r -p "Select backup to restore (number) or [q]uit: " SEL
+  [[ "$SEL" =~ ^[0-9]+$ ]] || { info "Aborted."; return 0; }
+  local idx=$((SEL - 1))
+  if [[ "$idx" -lt 0 || "$idx" -ge "${#ids[@]}" ]]; then
+    err "Invalid selection."
+    return 1
+  fi
+
+  local fid="${ids[$idx]}"
+  local fname="${names[$idx]}"
+  local local_path="$BACKUP_DIR/$fname"
+
+  if [ -f "$local_path" ]; then
+    read -r -p "File already exists locally. Overwrite? [y/N]: " OV
+    [[ "$OV" =~ ^[Yy]$ ]] || { info "Aborted."; return 0; }
+  fi
+
+  info "Downloading '$fname' from Google Drive..."
+  if run_as_user "gdrive files download --overwrite --destination '$BACKUP_DIR' '$fid' 2>&1"; then
+    chown "$USERNAME":"$USERNAME" "$local_path" 2>/dev/null || true
+    ok "Downloaded to $local_path"
+  else
+    err "Download failed."
+    return 1
+  fi
+
+  # Confirm restore
+  read -r -p "Restore from this backup now? [y/N]: " RST
+  [[ "$RST" =~ ^[Yy]$ ]] || { info "Done — backup saved locally, restore skipped."; return 0; }
+
+  do_full_restore "$local_path"
+}
+
+# ====================================================================
 # AUTO-BACKUP SCHEDULE (cron)
 # ====================================================================
 
@@ -786,6 +869,7 @@ while true; do
   echo "  [7] Full Backup (Hermes + 9Router + sessions + tokens + system)"
   echo "  [8] Full Restore (newest full backup)"
   echo "  [9] Upload latest backup to Google Drive"
+  echo "  [d] Download & restore from Google Drive"
   echo "  [0] Configure Auto-Backup (cron)"
   echo "  [c] Cleanup old full backups (keep last ${BACKUP_KEEP:-5})"
   echo "  [k] Change keep count (current: ${BACKUP_KEEP:-5})"
@@ -802,7 +886,8 @@ while true; do
     7) do_full_backup ;;
     8) do_full_restore ;;
     9) upload_to_gdrive ;;
-     0) setup_auto_backup ;;
+    d|D) restore_from_gdrive ;;
+    0) setup_auto_backup ;;
     c|C) cleanup_old_backups; cleanup_gdrive_backups ;;
     k|K) configure_keep_count ;;
     e|E) ok "Goodbye."; exit 0 ;;

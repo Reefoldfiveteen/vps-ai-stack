@@ -199,6 +199,19 @@ gdrive account add
 
 The `gdrive` CLI (glotlabs fork) is auto-installed if missing.
 
+### Restore from Google Drive (option [d])
+
+Lists all full backups stored in Google Drive's `AI_Stack_Backup`, lets you pick
+one, downloads it to `~/backup/`, and optionally runs the full restore immediately.
+
+```bash
+# From menu [d]:
+#   [1] full-reefii-20260722-025614.tar.gz
+#   [2] full-reefii-20260722-030000.tar.gz
+#   ...
+# Select backup to restore (number) or [q]uit: 1
+```
+
 ### Auto-backup via cron (option 0)
 
 Schedule automated full backups with optional GDrive sync:
