@@ -53,7 +53,7 @@ Then pick a menu option:
 | `7` | Restart all services (novnc-desktop, 9router) |
 | `8` | Configure swap size (interactive) |
 | `9` | Configure VNC access: SSH tunnel (127.0.0.1) vs public IP (0.0.0.0) |
-| `10` | Backup & Restore — Hermes + 9Router → `~/backup` |
+| `10` | Backup & Restore — simple (Hermes/9Router) + full (all-in-one) + GDrive upload + auto-backup cron |
 | `11` | Exit |
 
 > During **base install (option `1`)** you are also prompted for the access
@@ -137,9 +137,10 @@ hermes setup      # full setup wizard
 
 ## Backup & Restore
 
-Menu **`[10]`** backs up and restores your Hermes Agent and 9Router data.
-Backups are stored in the **target user's home**, under `~/backup`, as
-timestamped tarballs (e.g. `hermes-reefii-20260716-1530.tar.gz`).
+Menu **`[10]`** provides two backup modes — **simple** (per-app) and **full** (all-in-one).
+Backups are stored in the target user's `~/backup` as timestamped tarballs.
+
+### Simple backup (options 1-6)
 
 ```bash
 # From menu [10] on the VPS:
@@ -148,23 +149,81 @@ timestamped tarballs (e.g. `hermes-reefii-20260716-1530.tar.gz`).
 #   [5] Restore Hermes     [6] Restore 9Router
 ```
 
-What gets backed up:
-
-- **Hermes** — `~/.hermes` (settings, API keys, Telegram token, chat
-  history `.hermes_history`, sessions, plugins), `~/.local/state/hermes`,
-  and `~/HERMES` (your Hermes workspace).
+Backs up:
+- **Hermes** — `~/.hermes`, `~/.config/hermes`, `~/.local/share/hermes`,
+  `~/.cache/hermes`, `~/.local/state/hermes`, `~/HERMES`
 - **9Router** — `~/.config/9router`, `~/.9router`, `~/.local/share/9router`,
-  `~/.config/9Router`.
+  `~/.config/9Router`, `~/9Router`
 
-> **Note:** `~/.local/bin/hermes` (the executable) is intentionally *not*
-> backed up — it is recreated by the Hermes installer (`lib/hermes.sh`).
+> `~/.local/bin/hermes` (the executable) is intentionally *not* backed up — it is
+> recreated by the Hermes installer.
+
+### Full backup (option 7, recommended for migration)
+
+Single archive containing everything for a full VPS restore:
+
+```bash
+# [7] Full Backup   — creates full-<user>-<stamp>.tar.gz
+# [8] Full Restore  — restore from newest full backup
+```
+
+What's included:
+
+- **Hermes** — config, work dir (`~/HERMES`), sessions, API keys, `.env`, `.fb_credentials`
+- **9Router** — all config directories (`~/.config/9router`, `~/.9router`, `~/.config/9Router`, `~/9Router`)
+- **Cron** — `~/.hermes/cron`, `~/.hermes/config.yaml`
+- **System snapshot** — pip packages, npm globals, crontab, timezone, systemd user services, `requirements.txt`
+- **Camofox patches** (if installed)
+- A standalone `restore.sh` script is also generated in `~/backup/`
 
 To download a backup to your laptop:
 
 ```bash
+# List available:
 ssh reefii@<VPS_IP> "ls -lh ~/backup/"
-scp reefii@<VPS_IP>:~/backup/<file>.tar.gz .
+
+# Copy:
+scp reefii@<VPS_IP>:~/backup/full-reefii-20260722-025614.tar.gz .
 ```
+
+### Google Drive upload (option 9)
+
+Uploads the latest backup tarball to a Google Drive folder named `AI_Stack_Backup`.
+
+```bash
+# First-time auth (one-time):
+gdrive account add
+
+# Then from menu: [9] Upload latest backup to Google Drive
+```
+
+The `gdrive` CLI (glotlabs fork) is auto-installed if missing.
+
+### Auto-backup via cron (option 0)
+
+Schedule automated full backups with optional GDrive sync:
+
+```bash
+# [0] Configure Auto-Backup
+# Prompts for:
+#   - Schedule: daily 2 AM, weekly Sunday 2 AM, or custom cron expression
+#   - gdrive install (if not present)
+```
+
+Once configured, cron runs `~/backup/auto-backup.sh` which calls `do_full_backup`
+and uploads to Google Drive if authenticated.
+
+### Cleanup & retention
+
+Only the last **N** full backups are kept (default: 5). Cleanup runs automatically
+after every full backup (both locally and on Google Drive).
+
+```bash
+# [k] Change keep count (current: 5)
+# [c] Cleanup old full backups manually
+```
+
+To disable cleanup, set keep count to a very high number.
 
 ## Service management
 

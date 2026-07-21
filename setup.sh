@@ -75,7 +75,7 @@ show_menu() {
   echo "  [7] Restart All Services (novnc-desktop, 9router)"
   echo "  [8] Configure Swap Size"
   echo "  [9] Configure VNC Access (SSH tunnel / Public IP)"
-  echo "  [10] Backup & Restore (Hermes / 9Router)"
+  echo "  [10] Backup & Restore (Simple + Full / GDrive / Auto-Backup)"
   echo "  [11] Exit"
   echo
 }
