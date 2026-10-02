@@ -44,27 +44,25 @@ Then pick a menu option:
 
 | Option | What it does |
 |--------|--------------|
-| `1` | Install base system (LXQt + TigerVNC + noVNC + swap + UFW) |
-| `2` | Install Hermes Agent (download + deps only) |
-| `3` | Install 9Router (`npm install -g`, runs as your user) |
-| `4` | Install Browser — choose **Brave** or **Firefox** (Firefox uses Mozilla's apt repo, avoiding Ubuntu's snap) |
-| `5` | Install everything (1 → 2 → 3 → 4) |
-| `6` | Print the access & security guide |
-| `7` | Restart all services (novnc-desktop, 9router) |
-| `8` | Configure swap size (interactive) |
-| `9` | Configure VNC access: SSH tunnel (127.0.0.1) vs public IP (0.0.0.0) |
-| `10` | Backup & Restore — simple (Hermes/9Router) + full (all-in-one) + GDrive upload + auto-backup cron |
-| `11` | Exit |
+| `1` | Install base system: **noVNC + LXQt** (HTML5 browser-based, lightweight) |
+| `2` | Install base system: **XRDP + LXQt** (Native RDP, smooth & responsive for mstsc/Remmina) |
+| `3` | Install Hermes Agent (download + deps only) |
+| `4` | Install 9Router (`npm install -g`, runs as your user) |
+| `5` | Install Browser — choose **Brave** or **Firefox** (Firefox uses Mozilla's apt repo, avoiding Ubuntu's snap) |
+| `6` | Install All (Interactive: Desktop choice -> Hermes -> 9Router -> Browser) |
+| `7` | Print the access & security guide |
+| `8` | Restart all services (Desktop, 9router) |
+| `9` | Configure swap size (interactive) |
+| `10` | Configure Remote Desktop access: SSH tunnel (127.0.0.1) vs public IP (0.0.0.0) |
+| `11` | Backup & Restore — simple (Hermes/9Router) + full (all-in-one) + GDrive upload + auto-backup cron |
+| `12` | Exit |
 
-> During **base install (option `1`)** you are also prompted for the access
-> method (SSH tunnel vs public IP); this writes `/etc/vps-ai-stack/vnc.conf`
-> and configures UFW accordingly. Menu `[9]` can change it later.
+> During **base install (options `1` and `2`)** you are also prompted for the access
+> method (SSH tunnel vs public IP). Menu `[10]` can change it later.
 >
-> **`[9] Configure VNC Access`** toggles where noVNC listens. Default is
-> `127.0.0.1` (SSH tunnel only). Choosing public IP binds `0.0.0.0`, opens
-> port `6080` in UFW, and exposes VNC in **plaintext** — only do this if you
-> also open the port in your cloud firewall (Azure NSG) and accept the risk.
-> Switch back to SSH tunnel to close it again. |
+> **`[10] Configure Remote Desktop Access`** toggles where noVNC (:6080) or XRDP (:3389) listens.
+> Default is `127.0.0.1` (SSH tunnel only). Choosing public IP binds `0.0.0.0`, opens
+> the port in UFW, and exposes the port directly. Switch back to SSH tunnel to close it again. |
 
 > **Browser note:** Brave is installed for modern web apps (Next.js dashboards
 > etc.) that Falkon/QtWebEngine cannot render. It is **memory-heavy**
@@ -76,16 +74,29 @@ After install, a reboot is recommended so the per-user systemd services start cl
 
 ## Accessing the remote desktop
 
-noVNC is **not** exposed to the internet. From your laptop, open an SSH tunnel:
+### A. If using XRDP (Native Remote Desktop)
+
+From your laptop, open an SSH tunnel for port 3389:
+
+```bash
+ssh -o ServerAliveInterval=30 -o ServerAliveCountMax=10 -L 3389:127.0.0.1:3389 reefii@<VPS_IP>
+```
+
+Then open **Remote Desktop Connection (`mstsc`)** on Windows (or Remmina on Linux):
+- **Computer:** `localhost:3389`
+- **Username:** `reefii` (or your chosen user)
+- **Password:** your user's Linux password
+
+### B. If using noVNC (Browser-based)
+
+From your laptop, open an SSH tunnel for port 6080:
 
 ```bash
 ssh -o ServerAliveInterval=30 -o ServerAliveCountMax=10 -L 6080:127.0.0.1:6080 reefii@<VPS_IP>
 ```
 
 > **Keep the tunnel alive.** Add the `-o ServerAliveInterval=30` flags above (or
-> put them in `~/.ssh/config`) so the SSH tunnel is not dropped when idle — a
-> dropped tunnel shows up as "Disconnected" in noVNC. The base install also sets
-> `ClientAliveInterval` on the VPS sshd as a server-side safety net.
+> put them in `~/.ssh/config`) so the SSH tunnel is not dropped when idle.
 
 Then open your browser:
 
@@ -93,8 +104,7 @@ Then open your browser:
 http://localhost:6080
 ```
 
-Enter the VNC password you set during install. The VPS public IP is auto-detected
-and shown at the end of the base install.
+Enter the VNC password you set during install.
 
 ### Changing the VNC password
 

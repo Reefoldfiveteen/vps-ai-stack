@@ -97,7 +97,7 @@ do_backup() {
 do_restore() {
   local label="$1"; shift
   local dirs=("$@")
-  local latest; latest="$(ls -t "$BACKUP_DIR/${label}-${USERNAME}-"*.tar.gz 2>/dev/null | head -1)"
+  local latest; latest="$(ls -t "$BACKUP_DIR/${label}-${USERNAME}-"*.tar.gz "$BACKUP_DIR/${label}-"*.tar.gz 2>/dev/null | head -1)"
   if [[ -z "$latest" ]]; then
     warn "No $label backup found in $BACKUP_DIR."
     return 1
@@ -279,7 +279,7 @@ do_full_backup() {
 do_full_restore() {
   local latest="${1:-}"
   if [[ -z "$latest" ]]; then
-    latest="$(ls -t "$BACKUP_DIR/full-${USERNAME}-"*.tar.gz 2>/dev/null | head -1)"
+    latest="$(ls -t "$BACKUP_DIR/full-${USERNAME}-"*.tar.gz "$BACKUP_DIR"/full-*.tar.gz 2>/dev/null | head -1)"
     if [[ -z "$latest" ]]; then
       warn "No full backup found in $BACKUP_DIR."
       return 1
@@ -532,6 +532,11 @@ install_gdrive() {
   if command -v gdrive &>/dev/null; then
     ok "gdrive CLI already installed: $(gdrive version 2>/dev/null | head -1)"
     return 0
+  fi
+  local arch; arch="$(uname -m)"
+  if [[ "$arch" == "aarch64" || "$arch" == "arm64" ]]; then
+    warn "glotlabs/gdrive releases do not provide official prebuilt binaries for $arch."
+    warn "Recommended migration method for ARM64: copy backup via scp directly."
   fi
   info "Installing gdrive CLI (glotlabs/gdrive v3.9.1)..."
   local gdrive_url="https://github.com/glotlabs/gdrive/releases/download/3.9.1/gdrive_linux-x64.tar.gz"

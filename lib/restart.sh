@@ -33,23 +33,41 @@ export XDG_RUNTIME_DIR
 # ---- 1. Stop systemd user services (so they don't fight the manual start) ----
 su - "$USERNAME" -c "XDG_RUNTIME_DIR='$XDG_RUNTIME_DIR' systemctl --user stop novnc-desktop 9router >/dev/null 2>&1" || true
 
-# ---- 2. Kill ALL leftover processes for this user ----
-pkill -9 -u "$USERNAME" -f 'start-novnc.sh'     >/dev/null 2>&1 || true
-pkill -9 -u "$USERNAME" -f 'Xtigervnc'          >/dev/null 2>&1 || true
-pkill -9 -u "$USERNAME" -f 'websockify'         >/dev/null 2>&1 || true
-pkill -9 -u "$USERNAME" -f 'novnc_proxy'        >/dev/null 2>&1 || true
-su - "$USERNAME" -c "XDG_RUNTIME_DIR='$XDG_RUNTIME_DIR' vncserver -kill :1 >/dev/null 2>&1" || true
-sleep 2
+# ---- 2. Restart XRDP (if installed) ----
+XRDP_ACTIVE=0
+if command -v xrdp &>/dev/null || systemctl is-enabled xrdp &>/dev/null; then
+  info "Restarting XRDP service..."
+  systemctl restart xrdp >/dev/null 2>&1 || true
+  sleep 1
+  if systemctl is-active --quiet xrdp; then
+    ok "XRDP restarted and running on port 3389."
+    XRDP_ACTIVE=1
+  else
+    warn "XRDP restart attempted, but service is not active."
+  fi
+fi
 
-# ---- 3. Start noVNC desktop fresh (manual nohup — reliable path) ----
-info "Starting noVNC desktop (fresh)..."
-su - "$USERNAME" -c "XDG_RUNTIME_DIR='$XDG_RUNTIME_DIR' nohup /opt/vps-ai-stack/start-novnc.sh >/tmp/vps-ai-stack-novnc.\$(id -u).log 2>&1 &"
-sleep 6
+# ---- 3. Kill and restart noVNC desktop (if installed/configured) ----
+NOVNC_ACTIVE=0
+if [[ -f /opt/vps-ai-stack/start-novnc.sh ]]; then
+  info "Cleaning up leftover noVNC processes for '$USERNAME'..."
+  pkill -9 -u "$USERNAME" -f 'start-novnc.sh'     >/dev/null 2>&1 || true
+  pkill -9 -u "$USERNAME" -f 'Xtigervnc'          >/dev/null 2>&1 || true
+  pkill -9 -u "$USERNAME" -f 'websockify'         >/dev/null 2>&1 || true
+  pkill -9 -u "$USERNAME" -f 'novnc_proxy'        >/dev/null 2>&1 || true
+  su - "$USERNAME" -c "XDG_RUNTIME_DIR='$XDG_RUNTIME_DIR' vncserver -kill :1 >/dev/null 2>&1" || true
+  sleep 2
 
-if su - "$USERNAME" -c "XDG_RUNTIME_DIR='$XDG_RUNTIME_DIR' bash -c 'exec 3<>/dev/tcp/127.0.0.1/6080' >/dev/null 2>&1"; then
-  ok "noVNC listening on 127.0.0.1:6080"
-else
-  warn "6080 not up yet — check /tmp/vps-ai-stack-novnc.$(id -u "$USERNAME").log"
+  info "Starting noVNC desktop (fresh)..."
+  su - "$USERNAME" -c "XDG_RUNTIME_DIR='$XDG_RUNTIME_DIR' nohup /opt/vps-ai-stack/start-novnc.sh >/tmp/vps-ai-stack-novnc.\$(id -u).log 2>&1 &"
+  sleep 5
+
+  if su - "$USERNAME" -c "XDG_RUNTIME_DIR='$XDG_RUNTIME_DIR' bash -c 'exec 3<>/dev/tcp/127.0.0.1/6080' >/dev/null 2>&1"; then
+    ok "noVNC listening on 127.0.0.1:6080"
+    NOVNC_ACTIVE=1
+  else
+    warn "6080 not up yet — check /tmp/vps-ai-stack-novnc.$(id -u "$USERNAME").log"
+  fi
 fi
 
 # ---- 4. Restart 9Router ----
@@ -64,4 +82,11 @@ fi
 
 echo
 echo "Tunnel from laptop:"
-echo "  ssh -L 6080:localhost:6080 -L 20128:localhost:20128 $USERNAME@<VPS_IP>"
+PORTS_TUNNEL="-L 20128:localhost:20128"
+if (( NOVNC_ACTIVE == 1 )); then
+  PORTS_TUNNEL="-L 6080:localhost:6080 $PORTS_TUNNEL"
+fi
+if (( XRDP_ACTIVE == 1 )); then
+  PORTS_TUNNEL="-L 3389:localhost:3389 $PORTS_TUNNEL"
+fi
+echo "  ssh $PORTS_TUNNEL $USERNAME@<VPS_IP>"

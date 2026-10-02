@@ -15,23 +15,29 @@ cat <<EOF
   ACCESS & SECURITY GUIDE  (user: $USERNAME)
 ========================================================
 
-1) REMOTE DESKTOP (noVNC) - SSH tunnel only
+1) REMOTE DESKTOP
 --------------------------------------------------------
-From your laptop terminal:
+A) If you use XRDP (Native Remote Desktop / mstsc):
+   From your laptop terminal:
+       ssh -L 3389:localhost:3389 $USERNAME@$VPS_IP
 
-    ssh -L 6080:localhost:6080 $USERNAME@$VPS_IP
+   Then open Remote Desktop Connection (mstsc) on Windows:
+       Computer: localhost:3389
+       Username: $USERNAME
+       Password: (your user Linux password)
 
-Then open in your browser:
+B) If you use noVNC (Browser-based):
+   From your laptop terminal:
+       ssh -L 6080:localhost:6080 $USERNAME@$VPS_IP
 
-    http://localhost:6080
-
-Enter the VNC password you set during install.
-Port 6080 is NOT open to the internet (UFW blocks it).
+   Then open in your browser:
+       http://localhost:6080
+   (Enter the VNC password you set during install)
 
 2) 9ROUTER DASHBOARD
 --------------------------------------------------------
-Start 9Router desktop session via the noVNC browser, OR
-forward its port too:
+Start 9Router desktop session via your remote desktop browser, OR
+forward its port directly to your laptop:
 
     ssh -L 20128:localhost:20128 $USERNAME@$VPS_IP
 
@@ -39,7 +45,7 @@ Then open: http://localhost:20128/dashboard
 
 3) HERMES
 --------------------------------------------------------
-Inside the noVNC desktop, open terminal and run:
+Inside the remote desktop terminal, run:
 
     hermes            # chat
     hermes model      # pick provider (point to 9Router: http://localhost:20128/v1)
@@ -48,12 +54,17 @@ Inside the noVNC desktop, open terminal and run:
 4) SECURITY NOTES
 --------------------------------------------------------
 - UFW: deny all inbound, allow SSH only.
-- noVNC binds to 127.0.0.1 (localhost) inside VPS.
-- Never open port 6080 / 20128 to 0.0.0.0 in Azure NSG.
-- If you must expose, put behind reverse proxy + TLS + auth.
+- Services bind to 127.0.0.1 (localhost) inside VPS.
+- Never open port 3389, 6080, or 20128 to 0.0.0.0 in Cloud NSG / Firewall.
+- All connections are safely tunneled through SSH.
 
-5) SERVICE MANAGEMENT (as $USERNAME on VPS)
+5) SERVICE MANAGEMENT
 --------------------------------------------------------
+# XRDP (system service):
+sudo systemctl status xrdp
+sudo systemctl restart xrdp
+
+# noVNC & 9Router (user services):
 systemctl --user status novnc-desktop
 systemctl --user status 9router
 systemctl --user restart novnc-desktop

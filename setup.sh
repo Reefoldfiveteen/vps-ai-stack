@@ -66,17 +66,18 @@ show_menu() {
   echo -e "${BLUE}========================================${NC}"
   echo -e "  VPS AI STACK - Menu (user: ${GREEN}$USERNAME${BLUE})"
   echo -e "${BLUE}========================================${NC}"
-  echo "  [1] Install Base System (LXQt + TigerVNC + noVNC + swap + UFW)"
-  echo "  [2] Install Hermes Agent (download + deps only)"
-  echo "  [3] Install 9Router (npm install only)"
-  echo "  [4] Install Browser (Brave / Firefox)"
-  echo "  [5] Install All (1 -> 2 -> 3 -> 4)"
-  echo "  [6] Print Access & Security Guide"
-  echo "  [7] Restart All Services (novnc-desktop, 9router)"
-  echo "  [8] Configure Swap Size"
-  echo "  [9] Configure VNC Access (SSH tunnel / Public IP)"
-  echo "  [10] Backup & Restore (Simple + Full / GDrive / Auto-Backup)"
-  echo "  [11] Exit"
+  echo "  [1] Install Base System: noVNC + LXQt (Browser-based, port 6080)"
+  echo "  [2] Install Base System: XRDP + LXQt (Native RDP client, port 3389)"
+  echo "  [3] Install Hermes Agent (download + deps only)"
+  echo "  [4] Install 9Router (npm install only)"
+  echo "  [5] Install Browser (Brave / Firefox)"
+  echo "  [6] Install All (Desktop choice -> Hermes -> 9Router -> Browser)"
+  echo "  [7] Print Access & Security Guide"
+  echo "  [8] Restart All Services (Desktop, 9router)"
+  echo "  [9] Configure Swap Size"
+  echo "  [10] Configure Remote Desktop Access (SSH tunnel / Public IP)"
+  echo "  [11] Backup & Restore (Simple + Full / GDrive / Auto-Backup)"
+  echo "  [12] Exit"
   echo
 }
 
@@ -85,35 +86,44 @@ while true; do
   read -r -p "Select option: " CHOICE
   case "$CHOICE" in
     1) bash "$LIB_DIR/base.sh" ;;
-    2) bash "$LIB_DIR/hermes.sh" ;;
-    3) bash "$LIB_DIR/9router.sh" ;;
-    4)
-      bash "$LIB_DIR/browser.sh"
-      ;;
-    5)
-      for s in base hermes 9router browser; do
-        info "=== step: $s ==="
-        if bash "$LIB_DIR/$s.sh"; then
-          ok "$s complete"
-        else
-          err "$s failed (exit $?) — continuing with next step"
-        fi
-      done
-      ;;
+    2) bash "$LIB_DIR/xrdp.sh" ;;
+    3) bash "$LIB_DIR/hermes.sh" ;;
+    4) bash "$LIB_DIR/9router.sh" ;;
+    5) bash "$LIB_DIR/browser.sh" ;;
     6)
-      bash "$LIB_DIR/access_guide.sh"
+      echo
+      info "=== Step 1: Remote Desktop Base System ==="
+      echo "Choose your Remote Desktop system:"
+      echo "  [1] noVNC + LXQt (Browser-based via port 6080 - ultra-lightweight)"
+      echo "  [2] XRDP + LXQt  (Native Remote Desktop via port 3389 - smooth & fast)"
+      read -r -p "Selection [1/2, default: 2]: " DESK_CHOICE
+      DESK_CHOICE="${DESK_CHOICE:-2}"
+      if [[ "$DESK_CHOICE" == "1" ]]; then
+        BASE_SCRIPT="base.sh"
+      else
+        BASE_SCRIPT="xrdp.sh"
+      fi
+
+      info "Installing desktop ($BASE_SCRIPT)..."
+      bash "$LIB_DIR/$BASE_SCRIPT" || err "Desktop install encountered an issue"
+
+      info "=== Step 2: Hermes Agent ==="
+      bash "$LIB_DIR/hermes.sh" || err "Hermes install failed"
+
+      info "=== Step 3: 9Router ==="
+      bash "$LIB_DIR/9router.sh" || err "9Router install failed"
+
+      info "=== Step 4: Browser ==="
+      bash "$LIB_DIR/browser.sh" || err "Browser install failed"
+
+      ok "Install All complete!"
       ;;
-    7)
-      bash "$LIB_DIR/restart.sh"
-      ;;
-    8)
-      bash "$LIB_DIR/swap.sh"
-      ;;
-    9)
-      bash "$LIB_DIR/access.sh"
-      ;;
-    10) bash "$LIB_DIR/backup.sh" ;;
-    11) ok "Goodbye."; exit 0 ;;
+    7) bash "$LIB_DIR/access_guide.sh" ;;
+    8) bash "$LIB_DIR/restart.sh" ;;
+    9) bash "$LIB_DIR/swap.sh" ;;
+    10) bash "$LIB_DIR/access.sh" ;;
+    11) bash "$LIB_DIR/backup.sh" ;;
+    12) ok "Goodbye."; exit 0 ;;
      *) warn "Invalid option." ;;
   esac
 done
