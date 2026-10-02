@@ -68,13 +68,16 @@ if [[ "$TARGET" == "xrdp" ]]; then
   chmod 644 "$CONF"
 
   if [[ "$BIND" == "0.0.0.0" ]]; then
-    sed -i 's/^port=.*/port=3389/' /etc/xrdp/xrdp.ini
+    sed -i '0,/^port=/s/^port=.*/port=3389/' /etc/xrdp/xrdp.ini
+    sed -i '/^\[Xorg\]/,/^\[/ s/^port=.*/port=-1/' /etc/xrdp/xrdp.ini
     ufw allow 3389/tcp comment 'XRDP public' >/dev/null 2>&1 || true
+    iptables -I INPUT 1 -p tcp --dport 3389 -j ACCEPT 2>/dev/null || true
     ufw --force enable >/dev/null 2>&1 || true
     systemctl restart xrdp >/dev/null 2>&1 || true
     warn "XRDP is now bound to 0.0.0.0:3389 (public). Connect to <VPS_IP>:3389."
   else
-    sed -i 's/^port=.*/port=tcp:\/\/127.0.0.1:3389/' /etc/xrdp/xrdp.ini
+    sed -i '0,/^port=/s/^port=.*/port=tcp:\/\/127.0.0.1:3389/' /etc/xrdp/xrdp.ini
+    sed -i '/^\[Xorg\]/,/^\[/ s/^port=.*/port=-1/' /etc/xrdp/xrdp.ini
     ufw delete allow 3389/tcp >/dev/null 2>&1 || true
     ufw --force enable >/dev/null 2>&1 || true
     systemctl restart xrdp >/dev/null 2>&1 || true

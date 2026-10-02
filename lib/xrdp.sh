@@ -2,7 +2,7 @@
 #
 # vps-ai-stack/lib/xrdp.sh
 # Installs LXQt desktop + XRDP for native Remote Desktop Connection (mstsc / Remmina).
-# Configures swap, UFW, Polkit rules, and access mode (SSH tunnel vs public).
+# Configures swap, UFW, Polkit rules, certificates, and access mode (SSH tunnel vs public).
 #
 set -euo pipefail
 
@@ -29,17 +29,25 @@ export DEBIAN_FRONTEND=noninteractive
 info "Updating apt..."
 apt-get update -y
 
-info "Installing LXQt + XRDP stack..."
+info "Installing LXQt + XRDP stack and desktop components..."
 apt-get install -y --no-install-recommends \
-  lxqt-core lxqt-session openbox \
-  xrdp xorgxrdp \
+  lxqt-core lxqt-session lxqt-panel pcmanfm-qt openbox \
+  xrdp xorgxrdp xserver-xorg-core \
+  x11-xserver-utils x11-utils libxcb-cursor0 \
   xterm xinit dbus-x11 \
   curl wget unzip git ca-certificates \
   ufw net-tools
 
-# ---- Add user to ssl-cert group (required for XRDP certificate access) ----
-info "Adding '$USERNAME' to ssl-cert group..."
+# ---- Fix Xorg Xwrapper permission for non-root users ----
+info "Configuring Xwrapper to allow X server for all users..."
+echo "allowed_users=anybody" > /etc/X11/Xwrapper.config
+
+# ---- Add users to ssl-cert group & fix key.pem permissions ----
+info "Configuring SSL certificate permissions for XRDP..."
 adduser "$USERNAME" ssl-cert >/dev/null 2>&1 || true
+adduser xrdp ssl-cert >/dev/null 2>&1 || true
+chown root:ssl-cert /etc/xrdp/key.pem 2>/dev/null || true
+chmod 640 /etc/xrdp/key.pem 2>/dev/null || true
 
 # ---- Swap (user choice, default 2048 MB) ----
 DEFAULT_SWAP_MB=2048
@@ -65,25 +73,37 @@ else
   ok "Swap ready: $(swapon --show=SIZE --noheadings | tr -d ' ')"
 fi
 
+# ---- Pre-configure LXQt default window manager to Openbox ----
+info "Pre-configuring LXQt default window manager to Openbox..."
+mkdir -p "$USER_HOME/.config/lxqt"
+cat > "$USER_HOME/.config/lxqt/session.conf" <<'EOF'
+[General]
+window_manager=openbox
+EOF
+chown -R "$USERNAME":"$USERNAME" "$USER_HOME/.config/lxqt"
+
 # ---- User ~/.xsession for LXQt ----
 info "Configuring ~/.xsession for LXQt session..."
 cat > "$USER_HOME/.xsession" <<'EOF'
 #!/bin/sh
 unset SESSION_MANAGER
-if [ -z "$DBUS_SESSION_BUS_ADDRESS" ]; then
-  eval "$(dbus-launch --sh-syntax --exit-with-session)"
-fi
+unset DBUS_SESSION_BUS_ADDRESS
 exec startlxqt
 EOF
 chmod +x "$USER_HOME/.xsession"
 chown "$USERNAME":"$USERNAME" "$USER_HOME/.xsession"
 
-# Also configure /etc/xrdp/startwm.sh fallback
+# Configure /etc/xrdp/startwm.sh to unset conflicting managers and execute ~/.xsession
 if [[ -f /etc/xrdp/startwm.sh ]]; then
-  sed -i '/test -x \/etc\/X11\/Xsession && exec \/etc\/X11\/Xsession/i \
+  if ! grep -q "unset SESSION_MANAGER" /etc/xrdp/startwm.sh; then
+    sed -i '1i unset SESSION_MANAGER\nunset DBUS_SESSION_BUS_ADDRESS' /etc/xrdp/startwm.sh
+  fi
+  if ! grep -q "exec ~/.xsession" /etc/xrdp/startwm.sh; then
+    sed -i '/test -x \/etc\/X11\/Xsession && exec \/etc\/X11\/Xsession/i \
 if [ -r ~/.xsession ]; then \
   exec ~/.xsession \
 fi' /etc/xrdp/startwm.sh 2>/dev/null || true
+  fi
 fi
 
 # ---- Fix Polkit popup for color manager (Ubuntu XRDP fix) ----
@@ -126,17 +146,23 @@ ACCESS="${ACCESS:-1}"
 
 if [[ "$ACCESS" == "2" ]]; then
   XRDP_BIND="0.0.0.0"
-  sed -i 's/^port=.*/port=3389/' /etc/xrdp/xrdp.ini
+  # Replace port only in [Globals] section
+  sed -i '0,/^port=/s/^port=.*/port=3389/' /etc/xrdp/xrdp.ini
   ufw allow 3389/tcp comment 'XRDP public' >/dev/null 2>&1 || true
+  iptables -I INPUT 1 -p tcp --dport 3389 -j ACCEPT 2>/dev/null || true
   ufw --force enable >/dev/null 2>&1 || true
   warn "XRDP listening on 0.0.0.0:3389 (public). Ensure Cloud NSG/Firewall permits port 3389."
 else
   XRDP_BIND="127.0.0.1"
-  sed -i 's/^port=.*/port=tcp:\/\/127.0.0.1:3389/' /etc/xrdp/xrdp.ini
+  # Replace port only in [Globals] section
+  sed -i '0,/^port=/s/^port=.*/port=tcp:\/\/127.0.0.1:3389/' /etc/xrdp/xrdp.ini
   ufw delete allow 3389/tcp >/dev/null 2>&1 || true
   ufw --force enable >/dev/null 2>&1 || true
   ok "XRDP bound to 127.0.0.1:3389 (access via SSH tunnel only)."
 fi
+
+# ALWAYS ensure backend [Xorg] port stays -1 (never loopback to port 3389!)
+sed -i '/^\[Xorg\]/,/^\[/ s/^port=.*/port=-1/' /etc/xrdp/xrdp.ini
 
 echo "XRDP_BIND=$XRDP_BIND" > "$CONF_DIR/xrdp.conf"
 echo "DESKTOP_BACKEND=xrdp" > "$CONF_DIR/desktop.conf"
