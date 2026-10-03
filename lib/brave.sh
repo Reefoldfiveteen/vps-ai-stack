@@ -43,5 +43,15 @@ apt-get install -y brave-browser
 USER_HOME=$(eval echo ~"$USERNAME")
 su - "$USERNAME" -c "update-desktop-database ~/.local/share/applications 2>/dev/null || true"
 
-ok "Brave installed. Launch it from the LXQt menu (Internet > Brave) inside the remote desktop."
-warn "Brave is memory-heavy. On a 1 GiB VPS close it when not in use and keep swap sized (see menu [8])."
+# ---- Create Desktop shortcut ----
+DESKTOP_DIR="$USER_HOME/Desktop"
+mkdir -p "$DESKTOP_DIR"
+if [[ -f /usr/share/applications/brave-browser.desktop ]]; then
+  cp /usr/share/applications/brave-browser.desktop "$DESKTOP_DIR/"
+  chmod +x "$DESKTOP_DIR/brave-browser.desktop"
+  chown -R "$USERNAME":"$USERNAME" "$DESKTOP_DIR"
+  ok "Desktop shortcut created at ~/Desktop/brave-browser.desktop"
+fi
+
+ok "Brave installed. Launch it from Desktop shortcut or LXQt menu (Internet > Brave)."
+warn "Brave is memory-heavy. On a 1 GiB VPS close it when not in use and keep swap sized (see menu [9])."

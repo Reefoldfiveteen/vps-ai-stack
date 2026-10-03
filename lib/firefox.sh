@@ -51,5 +51,15 @@ apt-get install -y firefox
 USER_HOME=$(eval echo ~"$USERNAME")
 su - "$USERNAME" -c "update-desktop-database ~/.local/share/applications 2>/dev/null || true"
 
-ok "Firefox installed. Launch it from the LXQt menu (Internet > Firefox) inside the remote desktop."
-warn "Firefox is memory-heavy (like Brave). On a 1 GiB VPS close it when not in use and keep swap sized (see menu [8])."
+# ---- Create Desktop shortcut ----
+DESKTOP_DIR="$USER_HOME/Desktop"
+mkdir -p "$DESKTOP_DIR"
+if [[ -f /usr/share/applications/firefox.desktop ]]; then
+  cp /usr/share/applications/firefox.desktop "$DESKTOP_DIR/"
+  chmod +x "$DESKTOP_DIR/firefox.desktop"
+  chown -R "$USERNAME":"$USERNAME" "$DESKTOP_DIR"
+  ok "Desktop shortcut created at ~/Desktop/firefox.desktop"
+fi
+
+ok "Firefox installed. Launch it from Desktop shortcut or LXQt menu (Internet > Firefox)."
+warn "Firefox is memory-heavy. On a 1 GiB VPS close it when not in use and keep swap sized (see menu [9])."

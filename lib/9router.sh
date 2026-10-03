@@ -39,7 +39,30 @@ fi
 chown "$USERNAME":"$USERNAME" "$USER_HOME/.bashrc"
 
 info "Installing 9Router globally as '$USERNAME'..."
-su - "$USERNAME" -c "export PATH=\"$NPM_PREFIX/bin:\$PATH\"; npm install -g 9router"
+su - "$USERNAME" -c "export PATH=\"$NPM_PREFIX/bin:\$PATH\"; npm install -g sql.js 9router"
+
+# ---- Fix 9Router sql-wasm.wasm ENOENT crash ----
+info "Applying 9Router WebAssembly SQLite (sql.js) fix..."
+MODULE_DIR="$NPM_PREFIX/lib/node_modules/9router"
+WASM_SRC="$NPM_PREFIX/lib/node_modules/sql.js/dist"
+APP_SQL_DIST="$MODULE_DIR/app/node_modules/sql.js/dist"
+ROOT_SQL_DIST="$MODULE_DIR/node_modules/sql.js/dist"
+
+su - "$USERNAME" -c "mkdir -p '$APP_SQL_DIST' '$ROOT_SQL_DIST'"
+su - "$USERNAME" -c "cp -r '$WASM_SRC/'* '$APP_SQL_DIST/' 2>/dev/null || true"
+su - "$USERNAME" -c "cp -r '$WASM_SRC/'* '$ROOT_SQL_DIST/' 2>/dev/null || true"
+
+# ---- Disable aggressive Ubuntu 24.04 systemd-oomd auto-killer ----
+if systemctl is-active --quiet systemd-oomd 2>/dev/null; then
+  info "Disabling systemd-oomd to protect Node.js processes from premature kill..."
+  systemctl stop systemd-oomd >/dev/null 2>&1 || true
+  systemctl disable --now systemd-oomd >/dev/null 2>&1 || true
+  systemctl mask systemd-oomd >/dev/null 2>&1 || true
+fi
+
+# ---- Firewall for 9Router (port 20128) ----
+command -v ufw &>/dev/null && ufw allow 20128/tcp comment '9Router' >/dev/null 2>&1 || true
+iptables -I INPUT 1 -p tcp --dport 20128 -j ACCEPT 2>/dev/null || true
 
 # ---- systemd user service for 9Router ----
 SERVICE_DIR="$USER_HOME/.config/systemd/user"
@@ -55,7 +78,7 @@ After=network.target
 Type=simple
 Environment=PATH=$NPM_PREFIX/bin:/usr/local/bin:/usr/bin:/bin
 WorkingDirectory=$USER_HOME
-ExecStart=$NPM_PREFIX/bin/9router --host 127.0.0.1
+ExecStart=$NPM_PREFIX/bin/9router --host 0.0.0.0 --tray --no-browser --log
 Restart=always
 RestartSec=5
 
@@ -73,11 +96,11 @@ chown -R "$USERNAME":"$USERNAME" "$USER_HOME/.config"
 
 export XDG_RUNTIME_DIR="/run/user/$(id -u "$USERNAME")"
 systemctl start "user@$(id -u "$USERNAME").service" >/dev/null 2>&1 || true
-if su - "$USERNAME" -c "XDG_RUNTIME_DIR='$XDG_RUNTIME_DIR' systemctl --user daemon-reload >/dev/null 2>&1 && XDG_RUNTIME_DIR='$XDG_RUNTIME_DIR' systemctl --user start 9router.service >/dev/null 2>&1"; then
+if su - "$USERNAME" -c "XDG_RUNTIME_DIR='$XDG_RUNTIME_DIR' systemctl --user daemon-reload >/dev/null 2>&1 && XDG_RUNTIME_DIR='$XDG_RUNTIME_DIR' systemctl --user restart 9router.service >/dev/null 2>&1"; then
   ok "9Router service started."
 else
   warn "9Router not started now (no user bus during setup). It auto-starts after reboot (linger enabled)."
 fi
 
-ok "9Router installed. Dashboard: http://localhost:20128 (inside VPS / via tunnel)."
+ok "9Router installed. Dashboard: http://localhost:20128 (or http://<VPS_IP>:20128)."
 warn "Configure providers via dashboard yourself. Then point Hermes at http://localhost:20128/v1"

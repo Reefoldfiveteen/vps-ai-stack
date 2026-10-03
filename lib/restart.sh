@@ -76,8 +76,8 @@ if su - "$USERNAME" -c "XDG_RUNTIME_DIR='$XDG_RUNTIME_DIR' systemctl --user rest
 else
   warn "systemd 9router unavailable — starting manually."
   pkill -9 -u "$USERNAME" -f '9router' >/dev/null 2>&1 || true
-  su - "$USERNAME" -c "XDG_RUNTIME_DIR='$XDG_RUNTIME_DIR' PATH='\$HOME/.npm-global/bin:\$PATH' nohup 9router --host 127.0.0.1 >/tmp/9router.log 2>&1 &"
-  ok "9Router started manually on 127.0.0.1:20128"
+  su - "$USERNAME" -c "XDG_RUNTIME_DIR='$XDG_RUNTIME_DIR' PATH='\$HOME/.npm-global/bin:\$PATH' nohup 9router --host 0.0.0.0 --tray --no-browser --log >/tmp/9router.log 2>&1 &"
+  ok "9Router started manually on 0.0.0.0:20128"
 fi
 
 echo
