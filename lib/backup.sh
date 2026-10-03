@@ -528,66 +528,179 @@ RESTORE_EOF
 # GOOGLE DRIVE UPLOAD
 # ====================================================================
 
-install_gdrive() {
-  if command -v gdrive &>/dev/null; then
-    ok "gdrive CLI already installed: $(gdrive version 2>/dev/null | head -1)"
-    return 0
-  fi
-  local arch; arch="$(uname -m)"
-  if [[ "$arch" == "aarch64" || "$arch" == "arm64" ]]; then
-    warn "glotlabs/gdrive releases do not provide official prebuilt binaries for $arch."
-    warn "Recommended migration method for ARM64: copy backup via scp directly."
-  fi
-  info "Installing gdrive CLI (glotlabs/gdrive v3.9.1)..."
-  local gdrive_url="https://github.com/glotlabs/gdrive/releases/download/3.9.1/gdrive_linux-x64.tar.gz"
-  local tmp_dir="/tmp/gdrive-install-$$"
-  mkdir -p "$tmp_dir" || return 1
-  cd "$tmp_dir" || return 1
-
-  if command -v wget &>/dev/null; then
-    wget -q "$gdrive_url" -O gdrive.tar.gz || { err "wget download failed"; rm -rf "$tmp_dir"; return 1; }
-  elif command -v curl &>/dev/null; then
-    curl -sL "$gdrive_url" -o gdrive.tar.gz || { err "curl download failed"; rm -rf "$tmp_dir"; return 1; }
-  else
-    err "Neither wget nor curl available."
-    rm -rf "$tmp_dir"
-    return 1
-  fi
-
-  if [ ! -s gdrive.tar.gz ]; then
-    err "Downloaded file is empty."
-    rm -rf "$tmp_dir"
-    return 1
-  fi
-
-  tar -xzf gdrive.tar.gz || { err "Extract failed (corrupt download?)"; rm -rf "$tmp_dir"; return 1; }
-
-  # Binary name in glotlabs tarball is just "gdrive"
-  if [ ! -f gdrive ]; then
-    err "gdrive binary not found in extracted archive."
-    rm -rf "$tmp_dir"
-    return 1
-  fi
-
-  if mv gdrive /usr/local/bin/gdrive 2>/dev/null; then
-    chmod +x /usr/local/bin/gdrive
-  elif mv gdrive /usr/bin/gdrive 2>/dev/null; then
-    chmod +x /usr/bin/gdrive
-  else
-    err "No write permission to /usr/local/bin or /usr/bin"
-    rm -rf "$tmp_dir"
-    return 1
-  fi
-
-  rm -rf "$tmp_dir"
-
+check_gdrive_binary() {
   if ! command -v gdrive &>/dev/null; then
-    err "gdrive installed but not in PATH. Try: export PATH=\$PATH:/usr/local/bin"
     return 1
   fi
+  # Verify that the binary can actually run (not throwing ELF or syntax errors)
+  if ! gdrive version &>/dev/null; then
+    warn "Existing gdrive binary is corrupted or wrong architecture (ELF mismatch)."
+    return 2
+  fi
+  return 0
+}
 
-  ok "gdrive CLI installed: $(gdrive version 2>/dev/null | head -1)"
+install_gdrive() {
+  check_gdrive_binary
+  local check_res=$?
+  if [[ $check_res -eq 0 ]]; then
+    ok "gdrive CLI is already installed and working: $(gdrive version 2>/dev/null | head -1)"
+    read -r -p "Reinstall / recompile gdrive CLI anyway? [y/N]: " RE
+    if [[ ! "$RE" =~ ^[Yy]$ ]]; then
+      return 0
+    fi
+  elif [[ $check_res -eq 2 ]]; then
+    info "Removing incompatible/broken gdrive binary..."
+    rm -f /usr/local/bin/gdrive /usr/bin/gdrive "$USER_HOME/.cargo/bin/gdrive"
+  fi
+
+  local detected_arch; detected_arch="$(uname -m)"
+  info "Detected system architecture: $detected_arch"
+
+  echo
+  info "Select gdrive CLI installation mode:"
+  echo "  [1] Auto-detect (Recommended: ARM64 compiles via Cargo, x86_64 downloads prebuilt)"
+  echo "  [2] ARM64 (Compile from source via Rust/Cargo - Oracle Cloud Ampere A1 / ARM)"
+  echo "  [3] x86_64 (Precompiled binary - Azure standard / Intel / AMD)"
+  read -r -p "Choose option [1-3] (default: 1): " ARCH_OPT
+  ARCH_OPT="${ARCH_OPT:-1}"
+
+  local use_cargo=false
+  case "$ARCH_OPT" in
+    2)
+      use_cargo=true
+      ;;
+    3)
+      use_cargo=false
+      ;;
+    *)
+      if [[ "$detected_arch" == "aarch64" || "$detected_arch" == "arm64" ]]; then
+        use_cargo=true
+      else
+        use_cargo=false
+      fi
+      ;;
+  esac
+
+  if [ "$use_cargo" = true ]; then
+    info "Target: ARM64 (Oracle Cloud Ampere / ARM)."
+    info "Installing Rust compiler (Cargo) and build tools..."
+    apt-get update -y && apt-get install -y cargo git build-essential
+
+    info "Compiling glotlabs/gdrive natively for ARM64 (takes ~2 minutes)..."
+    su - "$USERNAME" -c "cargo install --git https://github.com/glotlabs/gdrive.git"
+
+    if [[ -f "$USER_HOME/.cargo/bin/gdrive" ]]; then
+      rm -f /usr/local/bin/gdrive /usr/bin/gdrive
+      cp "$USER_HOME/.cargo/bin/gdrive" /usr/local/bin/gdrive
+      chmod +x /usr/local/bin/gdrive
+      if gdrive version &>/dev/null; then
+        ok "Native ARM64 gdrive CLI installed: $(gdrive version 2>/dev/null | head -1)"
+        return 0
+      else
+        err "Installed binary failed verification."
+        return 1
+      fi
+    else
+      err "Cargo build failed for gdrive."
+      return 1
+    fi
+  else
+    # x86_64 / Intel / AMD (Azure / standard VPS)
+    info "Target: x86_64 (Azure / Intel / AMD)."
+    info "Installing precompiled gdrive CLI (glotlabs/gdrive v3.9.1 x64)..."
+    local gdrive_url="https://github.com/glotlabs/gdrive/releases/download/3.9.1/gdrive_linux-x64.tar.gz"
+    local tmp_dir="/tmp/gdrive-install-$$"
+    mkdir -p "$tmp_dir" || return 1
+    cd "$tmp_dir" || return 1
+
+    if command -v wget &>/dev/null; then
+      wget -q "$gdrive_url" -O gdrive.tar.gz || { err "wget download failed"; rm -rf "$tmp_dir"; return 1; }
+    elif command -v curl &>/dev/null; then
+      curl -sL "$gdrive_url" -o gdrive.tar.gz || { err "curl download failed"; rm -rf "$tmp_dir"; return 1; }
+    else
+      err "Neither wget nor curl available."
+      rm -rf "$tmp_dir"
+      return 1
+    fi
+
+    if [ ! -s gdrive.tar.gz ]; then
+      err "Downloaded file is empty."
+      rm -rf "$tmp_dir"
+      return 1
+    fi
+
+    tar -xzf gdrive.tar.gz || { err "Extract failed (corrupt download?)"; rm -rf "$tmp_dir"; return 1; }
+
+    if [ ! -f gdrive ]; then
+      err "gdrive binary not found in extracted archive."
+      rm -rf "$tmp_dir"
+      return 1
+    fi
+
+    rm -f /usr/local/bin/gdrive /usr/bin/gdrive
+    if mv gdrive /usr/local/bin/gdrive 2>/dev/null; then
+      chmod +x /usr/local/bin/gdrive
+    elif mv gdrive /usr/bin/gdrive 2>/dev/null; then
+      chmod +x /usr/bin/gdrive
+    else
+      err "No write permission to /usr/local/bin or /usr/bin"
+      rm -rf "$tmp_dir"
+      return 1
+    fi
+
+    rm -rf "$tmp_dir"
+
+    if ! gdrive version &>/dev/null; then
+      err "gdrive installed but cannot execute (ELF error). If this is an ARM VPS, select option 2 (ARM64)!"
+      return 1
+    fi
+
+    ok "gdrive CLI installed: $(gdrive version 2>/dev/null | head -1)"
+  fi
+
   warn "Authenticate once: run 'gdrive account add' as $USERNAME, follow URL, paste code."
+}
+
+connect_google_account() {
+  check_gdrive_binary
+  local check_res=$?
+  if [[ $check_res -ne 0 ]]; then
+    warn "gdrive CLI is not installed or broken/incompatible."
+    read -r -p "Install / recompile gdrive CLI now? [Y/n]: " IG
+    IG="${IG:-Y}"
+    if [[ "$IG" =~ ^[Yy]$ ]]; then
+      install_gdrive || return 1
+    else
+      info "Aborted."
+      return 0
+    fi
+  fi
+
+  echo
+  info "======================================================"
+  info "         CONNECT GOOGLE DRIVE ACCOUNT"
+  info "======================================================"
+  info "Prerequisites: Google Cloud OAuth Client ID & Secret"
+  info "1. Enter your Client ID and Client Secret when asked."
+  info "2. Open the authorization URL printed in your browser."
+  info "3. Allow access, copy verification code, and paste here."
+  info "======================================================"
+  echo
+  read -r -p "Ready to connect Google account? [Y/n]: " READY
+  READY="${READY:-Y}"
+  [[ "$READY" =~ ^[Yy]$ ]] || { info "Aborted."; return 0; }
+
+  # Run as the regular user so auth tokens stay in ~/.config/gdrive3
+  su - "$USERNAME" -c "gdrive account add"
+
+  echo
+  info "Verifying connected accounts:"
+  if su - "$USERNAME" -c "gdrive account list" 2>/dev/null; then
+    ok "Google Drive account connected successfully!"
+  else
+    warn "Failed to list accounts or no account connected yet."
+  fi
 }
 
 upload_to_gdrive() {
@@ -597,8 +710,9 @@ upload_to_gdrive() {
     return 1
   fi
 
-  if ! command -v gdrive &>/dev/null; then
-    warn "gdrive not installed."
+  check_gdrive_binary
+  if [[ $? -ne 0 ]]; then
+    warn "gdrive not installed or broken."
     read -r -p "Install gdrive CLI now? [y/N]: " GI
     [[ "$GI" =~ ^[Yy]$ ]] || { info "Aborted."; return 0; }
     install_gdrive || return 1
@@ -644,8 +758,9 @@ gdrive_folder_id() {
 }
 
 restore_from_gdrive() {
-  if ! command -v gdrive &>/dev/null; then
-    warn "gdrive not installed."
+  check_gdrive_binary
+  if [[ $? -ne 0 ]]; then
+    warn "gdrive not installed or broken."
     read -r -p "Install gdrive CLI now? [y/N]: " GI
     [[ "$GI" =~ ^[Yy]$ ]] || return 0
     install_gdrive || return 1
@@ -894,6 +1009,7 @@ while true; do
   echo "  [8] Full Restore (newest full backup)"
   echo "  [9] Upload latest backup to Google Drive"
   echo "  [d] Download & restore from Google Drive"
+  echo "  [a] Add / Connect Google Account (gdrive account add)"
   echo "  [0] Configure Auto-Backup (cron)"
   echo "  [c] Cleanup old full backups (keep last ${BACKUP_KEEP:-5})"
   echo "  [k] Change keep count (current: ${BACKUP_KEEP:-5})"
@@ -911,6 +1027,7 @@ while true; do
     8) do_full_restore ;;
     9) upload_to_gdrive ;;
     d|D) restore_from_gdrive ;;
+    a|A) connect_google_account ;;
     0) setup_auto_backup ;;
     c|C) cleanup_old_backups; cleanup_gdrive_backups ;;
     k|K) configure_keep_count ;;
