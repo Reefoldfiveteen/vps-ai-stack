@@ -800,30 +800,44 @@ restore_from_gdrive() {
     return 1
   fi
 
+  info "Searching for backup files on Google Drive..."
   local folder_id; folder_id="$(gdrive_folder_id)"
-  if [[ -z "$folder_id" ]]; then
-    err "No AI_Stack_Backup folder found on Google Drive."
-    return 1
+  local files=""
+
+  # 1. Search inside AI_Stack_Backup folder if found
+  if [[ -n "$folder_id" ]]; then
+    files="$(run_as_user "gdrive files list --query \"'${folder_id}' in parents and trashed = false\" --skip-header --order-by 'name desc' --field-separator '|' --max 50 2>/dev/null" | grep -iE '\.tar\.gz')"
   fi
 
-  # List full backup files in GDrive
-  local files
-  files="$(run_as_user "gdrive files list --parent '$folder_id' --skip-header --order-by 'name desc' --field-separator '|' --max 50 2>/dev/null" | grep "full-${USERNAME}-.*\.tar\.gz")"
+  # 2. If no files found inside folder, search across the entire drive for backup tarballs
   if [[ -z "$files" ]]; then
-    err "No full backup files found in AI_Stack_Backup folder."
+    info "Searching across entire Google Drive for backup archives..."
+    files="$(run_as_user "gdrive files list --query \"name contains '.tar.gz' and trashed = false\" --skip-header --order-by 'name desc' --field-separator '|' --max 50 2>/dev/null")"
+  fi
+
+  if [[ -z "$files" ]]; then
+    err "No backup (.tar.gz) files found in Google Drive."
     return 1
   fi
 
   echo
-  echo "Available full backups in Google Drive (AI_Stack_Backup):"
+  echo "Available backups in Google Drive:"
   local i=1
   local ids=() names=()
   while IFS='|' read -r fid fname rest; do
+    fname="$(echo "$fname" | tr -d '\r' | xargs)"
+    fid="$(echo "$fid" | tr -d '\r' | xargs)"
+    [[ -z "$fid" || -z "$fname" ]] && continue
     echo "  [$i] $fname"
     ids+=("$fid")
     names+=("$fname")
     ((i++))
   done <<< "$files"
+
+  if [[ ${#ids[@]} -eq 0 ]]; then
+    err "No valid backup files parsed from Google Drive."
+    return 1
+  fi
 
   echo
   read -r -p "Select backup to restore (number) or [q]uit: " SEL
@@ -839,7 +853,7 @@ restore_from_gdrive() {
   local local_path="$BACKUP_DIR/$fname"
 
   if [ -f "$local_path" ]; then
-    read -r -p "File already exists locally. Overwrite? [y/N]: " OV
+    read -r -p "File already exists locally ($local_path). Overwrite? [y/N]: " OV
     [[ "$OV" =~ ^[Yy]$ ]] || { info "Aborted."; return 0; }
   fi
 
@@ -966,7 +980,7 @@ cleanup_old_backups() {
 cleanup_gdrive_backups() {
   local keep=${BACKUP_KEEP:-5}
 
-  if ! command -v gdrive &>/dev/null; then
+  if ! check_gdrive_binary; then
     return 0
   fi
 
@@ -979,7 +993,7 @@ cleanup_gdrive_backups() {
 
   # List backup files in GDrive folder, sorted by name (desc = newest first)
   local files
-  files="$(run_as_user "gdrive files list --parent '$folder_id' --skip-header --order-by 'name desc' --field-separator '|' --max 50 2>/dev/null" | grep "full-${USERNAME}-.*tar\.gz" | head -50)"
+  files="$(run_as_user "gdrive files list --query \"'${folder_id}' in parents and trashed = false\" --skip-header --order-by 'name desc' --field-separator '|' --max 50 2>/dev/null" | grep -iE '\.tar\.gz' | head -50)"
   if [[ -z "$files" ]]; then
     return 0
   fi
@@ -992,6 +1006,9 @@ cleanup_gdrive_backups() {
   info "GDrive cleanup: $total backups, keeping $keep..."
   local deleted=0
   while IFS='|' read -r fid fname rest; do
+    fid="$(echo "$fid" | tr -d '\r' | xargs)"
+    fname="$(echo "$fname" | tr -d '\r' | xargs)"
+    [[ -z "$fid" ]] && continue
     run_as_user "gdrive files delete '$fid' 2>/dev/null" && info "  Deleted: $fname" && ((deleted++))
   done <<< "$(echo "$files" | tail -n +$((keep + 1)))"
   ok "GDrive cleanup done — removed $deleted old backup(s)"
