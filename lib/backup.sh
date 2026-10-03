@@ -584,11 +584,43 @@ install_gdrive() {
 
   if [ "$use_cargo" = true ]; then
     info "Target: ARM64 (Oracle Cloud Ampere / ARM)."
-    info "Installing Rust compiler (Cargo) and build tools..."
-    apt-get update -y && apt-get install -y cargo git build-essential
+    info "Installing build dependencies (git, curl, build-essential)..."
+    apt-get update -y && apt-get install -y git curl build-essential pkg-config libssl-dev
 
-    info "Compiling glotlabs/gdrive natively for ARM64 (takes ~2 minutes)..."
-    su - "$USERNAME" -c "cargo install --git https://github.com/glotlabs/gdrive.git"
+    # Ubuntu 24.04 apt cargo is 1.75.0 which fails on edition2024. Install modern Rust via rustup.
+    if ! su - "$USERNAME" -c "source \$HOME/.cargo/env 2>/dev/null && command -v cargo &>/dev/null" || \
+       ! su - "$USERNAME" -c "source \$HOME/.cargo/env 2>/dev/null && rustc --version 2>/dev/null" | grep -qE "1\.(8[5-9]|[9][0-9])"; then
+      info "Installing/updating modern Rust toolchain via rustup (supports edition 2024)..."
+      su - "$USERNAME" -c "curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable"
+    fi
+
+    info "Cloning glotlabs/gdrive v3.9.1 and compiling natively with --locked..."
+    local build_dir="/tmp/gdrive-arm64-build-$$"
+    rm -rf "$build_dir"
+    mkdir -p "$build_dir"
+    git clone --branch 3.9.1 --depth 1 https://github.com/glotlabs/gdrive.git "$build_dir"
+    chown -R "$USERNAME:$USERNAME" "$build_dir"
+
+    if su - "$USERNAME" -c "source \$HOME/.cargo/env 2>/dev/null || export PATH=\$HOME/.cargo/bin:\$PATH; cd '$build_dir' && cargo build --release --locked"; then
+      if [[ -f "$build_dir/target/release/gdrive" ]]; then
+        rm -f /usr/local/bin/gdrive /usr/bin/gdrive
+        cp "$build_dir/target/release/gdrive" /usr/local/bin/gdrive
+        chmod +x /usr/local/bin/gdrive
+        rm -rf "$build_dir"
+        if gdrive version &>/dev/null; then
+          ok "Native ARM64 gdrive CLI installed: $(gdrive version 2>/dev/null | head -1)"
+          return 0
+        else
+          err "Installed binary failed verification."
+          return 1
+        fi
+      fi
+    fi
+
+    # Fallback to cargo install if local build failed
+    warn "Direct build failed, attempting fallback cargo install..."
+    su - "$USERNAME" -c "source \$HOME/.cargo/env 2>/dev/null || export PATH=\$HOME/.cargo/bin:\$PATH; cargo install --git https://github.com/glotlabs/gdrive.git --tag 3.9.1"
+    rm -rf "$build_dir"
 
     if [[ -f "$USER_HOME/.cargo/bin/gdrive" ]]; then
       rm -f /usr/local/bin/gdrive /usr/bin/gdrive
@@ -597,14 +629,11 @@ install_gdrive() {
       if gdrive version &>/dev/null; then
         ok "Native ARM64 gdrive CLI installed: $(gdrive version 2>/dev/null | head -1)"
         return 0
-      else
-        err "Installed binary failed verification."
-        return 1
       fi
-    else
-      err "Cargo build failed for gdrive."
-      return 1
     fi
+
+    err "Failed to build ARM64 gdrive CLI."
+    return 1
   else
     # x86_64 / Intel / AMD (Azure / standard VPS)
     info "Target: x86_64 (Azure / Intel / AMD)."
